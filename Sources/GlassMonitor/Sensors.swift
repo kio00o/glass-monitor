@@ -57,10 +57,33 @@ enum Sensors {
             let charging = (d[kIOPSIsChargingKey] as? Bool) ?? false
             let key = charging ? kIOPSTimeToFullChargeKey : kIOPSTimeToEmptyKey
             var mins = d[key] as? Int
-            if let m = mins, m < 0 { mins = nil }
+            if let m = mins, m < 0 { mins = nil }      // macOS is still "calculating"
+            if charging { ampEMA = nil }
+            else if mins == nil { mins = estimateMinutesOnBattery() }
             return Battery(percent: max > 0 ? cur * 100 / max : cur, charging: charging, minutes: mins, present: true)
         }
         return Battery(percent: 100, charging: false, minutes: nil, present: false)
+    }
+
+    // MARK: Own battery estimate
+    private static var ampEMA: Double?
+
+    /// macOS needs a few minutes after unplugging before it reports time remaining.
+    /// Meanwhile estimate it as remaining capacity ÷ smoothed discharge current.
+    private static func estimateMinutesOnBattery() -> Int? {
+        let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard svc != 0 else { return nil }
+        defer { IOObjectRelease(svc) }
+        var props: Unmanaged<CFMutableDictionary>?
+        guard IORegistryEntryCreateCFProperties(svc, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+              let d = props?.takeRetainedValue() as? [String: Any] else { return nil }
+        let remaining = (d["AppleRawCurrentCapacity"] as? Int) ?? ((d["BatteryData"] as? [String: Any])?["RemainingCapacity"] as? Int)
+        guard let mAh = remaining, mAh > 0, let raw = (d["Amperage"] as? NSNumber)?.uint64Value else { return nil }
+        let draw = -Double(Int64(bitPattern: raw))                 // mA, positive while discharging
+        guard draw > 0 else { return nil }
+        let ema = ampEMA.map { $0 * 0.85 + draw * 0.15 } ?? draw    // smooth out spikes
+        ampEMA = ema
+        return min(max(Int(Double(mAh) / ema * 60), 1), 24 * 60)
     }
 
     // MARK: CPU load
