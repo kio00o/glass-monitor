@@ -1,7 +1,7 @@
 # Glass Monitor
 
 A tiny macOS menu-bar system monitor in black-and-white Liquid Glass, with an animated mascot.
-Disk, memory, battery, Claude plan limits, Wi-Fi throughput + speed test, Bluetooth devices.
+Disk, memory (with a list of the heaviest apps you can quit), battery, Claude plan limits with notifications at 20/40/80 %, Wi-Fi throughput + speed test, Bluetooth devices.
 
 ## Install
 
@@ -12,7 +12,7 @@ Disk, memory, battery, Claude plan limits, Wi-Fi throughput + speed test, Blueto
    ```
 3. Allow Location (needed to read the Wi-Fi name) and Bluetooth when asked.
 
-Requires an Apple Silicon Mac on macOS 26 (Tahoe) or newer. It adds itself to Login Items on first launch.
+Works on macOS 14 (Sonoma) or newer, on Apple Silicon and Intel. On macOS 26 it uses Liquid Glass, on older systems a frosted material. It adds itself to Login Items on first launch (toggle it from the right-click menu on the menu-bar icon).
 
 ### Claude limits
 

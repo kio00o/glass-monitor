@@ -179,7 +179,7 @@ struct EyesPanel: View {
             }
         }
         .padding(6)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .glass(.rect(cornerRadius: 16))
         .contentShape(.rect(cornerRadius: 16))
         .onTapGesture { eyes.poke() }
     }

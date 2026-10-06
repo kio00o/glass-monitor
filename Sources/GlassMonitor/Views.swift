@@ -31,7 +31,7 @@ private struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: fill ? .infinity : nil, alignment: .topLeading)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .glass(.rect(cornerRadius: 16))
     }
 }
 
@@ -108,6 +108,8 @@ struct ContentView: View {
                 NetworkPage().transition(.opacity)
             } else if m.page == .claude {
                 ClaudePage().transition(.opacity)
+            } else if m.page == .memory {
+                MemoryPage().transition(.opacity)
             } else {
                 mainPage.transition(.opacity)
             }
@@ -139,7 +141,7 @@ struct ContentView: View {
 
     private var mainPage: some View {
         ZStack {
-            GlassEffectContainer(spacing: 0) {
+            GlassGroup {
                 VStack(spacing: 10) {
                     HStack(spacing: 10) { EyesPanel(); disk }.frame(height: 90)
                     HStack(spacing: 10) { memory; claude }.frame(height: 90)
@@ -160,7 +162,7 @@ struct ContentView: View {
     private var disk: some View {
         Card(fill: true) {
             HStack(alignment: .top, spacing: 10) {
-                IconView(name: "internaldrive.fill")
+                DriveIcon()
                 VStack(alignment: .leading, spacing: 3) {
                     Title(text: m.volumeName)
                     Subtitle(text: "Available: \(formatBytes(m.disk.available))")
@@ -174,14 +176,14 @@ struct ContentView: View {
     private var memory: some View {
         Card(fill: true) {
             HStack(alignment: .top, spacing: 10) {
-                IconView(name: "memorychip.fill")
+                MemoryChipIcon()
                 VStack(alignment: .leading, spacing: 3) {
                     Title(text: "Memory")
                     Subtitle(text: "Pressure: \(m.memoryPressure)%")
                 }
             }
             Spacer(minLength: 14)
-            HStack { Spacer(); ActionLink(text: "Free Up", action: m.openActivityMonitor) }
+            HStack { Spacer(); ActionLink(text: "Free Up", action: m.openMemory) }
         }
     }
 
@@ -359,7 +361,7 @@ private struct DotRing: View {
                         .rotationEffect(.degrees(Double(i) * 6))
                 }
                 Circle().fill(Color.primary.opacity(0.08)).frame(width: 86, height: 86)
-                    .glassEffect(.regular, in: .circle)
+                    .glass(.circle)
                 VStack(spacing: 4) {
                     Image(systemName: done ? "checkmark.circle" : "arrow.up.arrow.down")
                         .font(.system(size: 18)).foregroundStyle(Color.primary)
@@ -379,7 +381,7 @@ private struct NetworkPage: View {
         VStack(alignment: .leading, spacing: 0) { c() }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .glass(.rect(cornerRadius: 16))
     }
 
     private func chart(_ title: String, _ total: UInt64, _ speed: Double, _ h: [Double]) -> some View {
@@ -394,7 +396,7 @@ private struct NetworkPage: View {
         .foregroundStyle(Color.primary)
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .glass(.rect(cornerRadius: 16))
     }
 
     private var mbps: Double? {
@@ -410,13 +412,13 @@ private struct NetworkPage: View {
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
+        GlassGroup {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Button { m.page = .main } label: {
                         Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.primary).frame(width: 28, height: 28)
-                            .glassEffect(.regular, in: .circle)
+                            .glass(.circle)
                             .contentShape(.circle)
                     }
                     .buttonStyle(.plain)
@@ -513,17 +515,17 @@ private struct ClaudePage: View {
         VStack(alignment: .leading, spacing: 0) { c() }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .glass(.rect(cornerRadius: 16))
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
+        GlassGroup {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Button { m.page = .main } label: {
                         Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.primary).frame(width: 28, height: 28)
-                            .glassEffect(.regular, in: .circle)
+                            .glass(.circle)
                             .contentShape(.circle)
                     }
                     .buttonStyle(.plain)
@@ -549,9 +551,9 @@ private struct ClaudePage: View {
 private struct ClaudeMark: View {
     private static let lengths: [CGFloat] = [1, 0.62, 0.9, 0.55, 1, 0.7, 0.85, 0.6, 1, 0.58, 0.92, 0.66]
 
-    var body: some View {
+    private func rays(long: Bool) -> some View {
         Path { p in
-            for (i, l) in Self.lengths.enumerated() {
+            for (i, l) in Self.lengths.enumerated() where (l >= 0.75) == long {
                 let a = Double(i) / Double(Self.lengths.count) * 2 * .pi
                 p.move(to: CGPoint(x: 0.5 + 0.1 * CGFloat(cos(a)), y: 0.5 + 0.1 * CGFloat(sin(a))))
                 p.addLine(to: CGPoint(x: 0.5 + 0.5 * l * CGFloat(cos(a)), y: 0.5 + 0.5 * l * CGFloat(sin(a))))
@@ -559,7 +561,118 @@ private struct ClaudeMark: View {
         }
         .applying(CGAffineTransform(scaleX: 20, y: 20))
         .stroke(Color.primary, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-        .frame(width: 20, height: 20)
+        .opacity(long ? 1 : 0.5)
+    }
+
+    var body: some View {
+        ZStack { rays(long: false); rays(long: true) }
+            .frame(width: 20, height: 20)
+            .frame(width: 30, height: 30)
+    }
+}
+
+/// Drive with a see-through base; the SF Symbol is a single layer, so it is drawn by hand.
+private struct DriveIcon: View {
+    var body: some View {
+        ZStack {
+            Path { p in
+                p.move(to: CGPoint(x: 6.5, y: 0.8)); p.addLine(to: CGPoint(x: 15.5, y: 0.8))
+                p.addLine(to: CGPoint(x: 20.2, y: 9.6)); p.addLine(to: CGPoint(x: 1.8, y: 9.6)); p.closeSubpath()
+            }
+            .fill(Color.primary)
+            .overlay(Path { p in
+                p.move(to: CGPoint(x: 6.5, y: 0.8)); p.addLine(to: CGPoint(x: 15.5, y: 0.8))
+                p.addLine(to: CGPoint(x: 20.2, y: 9.6)); p.addLine(to: CGPoint(x: 1.8, y: 9.6)); p.closeSubpath()
+            }.stroke(Color.primary, style: StrokeStyle(lineWidth: 1.6, lineJoin: .round)))
+            .frame(width: 22, height: 10.4).offset(y: -3.8)
+
+            RoundedRectangle(cornerRadius: 3.4).frame(width: 22, height: 7.4)
+                .foregroundStyle(Color.primary.opacity(0.5))
+                .offset(y: 5.4)
+            HStack(spacing: 1.9) {
+                ForEach(0..<5, id: \.self) { _ in Capsule().frame(width: 1.1, height: 2.6) }
+            }
+            .foregroundStyle(Color.primary)
+            .offset(x: 1.5, y: 5.4)
+        }
+        .frame(width: 30, height: 30)
+    }
+}
+
+// MARK: - Memory page
+
+private func formatMemory(_ bytes: UInt64) -> String {
+    let gb = Double(bytes) / 1_073_741_824
+    return gb >= 1 ? String(format: "%.1f GB", gb).replacingOccurrences(of: ".", with: ",")
+                   : String(format: "%.0f MB", Double(bytes) / 1_048_576)
+}
+
+private struct MemoryPage: View {
+    @EnvironmentObject var m: Monitor
+
+    var body: some View {
+        GlassGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Button { m.page = .main } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.primary).frame(width: 28, height: 28)
+                            .glass(.circle)
+                            .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    Text("Memory").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.primary)
+                    Spacer()
+                    Text("Pressure: \(m.memoryPressure)%").font(.system(size: 11.5)).foregroundStyle(Color.primary.opacity(0.62))
+                }
+                VStack(spacing: 0) {
+                    if m.memoryApps.isEmpty {
+                        Subtitle(text: "Loading…").padding(14)
+                    }
+                    ForEach(m.memoryApps) { a in
+                        HStack(spacing: 10) {
+                            Image(nsImage: a.icon).resizable().frame(width: 28, height: 28)
+                            Text(a.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(formatMemory(a.bytes)).font(.system(size: 11.5)).monospacedDigit()
+                                .foregroundStyle(Color.primary.opacity(0.62))
+                            Button { m.quit(a) } label: {
+                                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color.primary).frame(width: 24, height: 24)
+                                    .glass(.circle)
+                                    .contentShape(.circle)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Quit \(a.name)")
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        if a.id != m.memoryApps.last?.id {
+                            Divider().overlay(Color.primary.opacity(0.08)).padding(.leading, 52)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glass(.rect(cornerRadius: 16))
+                .animation(.easeInOut(duration: 0.2), value: m.memoryApps.map(\.id))
+            }
+            .padding(12)
+        }
+    }
+}
+
+/// Memory chip with see-through pins (the SF Symbol is a single layer, so its pins can't be dimmed).
+private struct MemoryChipIcon: View {
+    var body: some View {
+        ZStack {
+            ForEach(0..<5, id: \.self) { i in
+                let x = (CGFloat(i) - 2) * 4.6
+                Capsule().frame(width: 1.8, height: 3.4).offset(x: x, y: -7.2)
+                Capsule().frame(width: 1.8, height: 3.4).offset(x: x, y: 7.2)
+            }
+            .opacity(0.5)
+            RoundedRectangle(cornerRadius: 3.2).frame(width: 22, height: 12.5)
+        }
+        .foregroundStyle(Color.primary)
         .frame(width: 30, height: 30)
     }
 }

@@ -16,13 +16,23 @@ final class Monitor: ObservableObject {
     @Published var up = 0.0
     @Published var devices: [Sensors.Device] = []
     @Published var audioPlaying = false
+
+    struct MemApp: Identifiable {
+        let id: String            // bundle path
+        let name: String
+        let icon: NSImage
+        let bytes: UInt64
+        let app: NSRunningApplication
+    }
+    @Published var memoryApps: [MemApp] = []
+    private var memBusy = false
     @Published var speedTest: SpeedTest = .idle { didSet { onSpeedTest?(speedTest) } }
     var onSpeedTest: ((SpeedTest) -> Void)?
 
     struct ClaudeWindow { var percent: Double; var resetsAt: Date }
     struct ClaudeLimits { var fiveHour: ClaudeWindow?; var sevenDay: ClaudeWindow? }
     @Published var claude: ClaudeLimits?
-    enum Page { case main, network, claude }
+    enum Page { case main, network, claude, memory }
     @Published var page: Page = .main
     @Published var downHistory = [Double](repeating: 0, count: 40)
     @Published var upHistory = [Double](repeating: 0, count: 40)
@@ -87,6 +97,7 @@ final class Monitor: ObservableObject {
         devices = Sensors.bluetoothDevices()
         updateAudio()
         refreshClaude()
+        refreshMemoryApps()
     }
 
     /// Uses Apple's built-in `networkQuality` tool.
@@ -160,6 +171,38 @@ final class Monitor: ObservableObject {
                 self.nextClaudeFetch = Date().addingTimeInterval(self.claudeInterval)
             }
         }
+    }
+
+    func openMemory() {
+        page = .memory
+        refreshMemoryApps()
+    }
+
+    /// Running apps by memory use; only computed while the Memory page is open.
+    func refreshMemoryApps() {
+        guard page == .memory, !memBusy else { return }
+        memBusy = true
+        Task.detached {
+            let usage = ProcessMemory.byApp()
+            await MainActor.run {
+                self.memBusy = false
+                let me = Bundle.main.bundleIdentifier
+                let apps: [MemApp] = NSWorkspace.shared.runningApplications.compactMap { app in
+                    let id = app.bundleIdentifier ?? ""
+                    guard let url = app.bundleURL, let bytes = usage[url.path], id != me, id != "com.apple.finder",
+                          app.activationPolicy == .regular || (app.activationPolicy == .accessory && !id.hasPrefix("com.apple.")) else { return nil }
+                    let icon = app.icon ?? NSWorkspace.shared.icon(forFile: url.path)
+                    return MemApp(id: url.path, name: app.localizedName ?? url.deletingPathExtension().lastPathComponent,
+                                  icon: icon, bytes: bytes, app: app)
+                }
+                self.memoryApps = Array(apps.sorted { $0.bytes > $1.bytes }.prefix(8))
+            }
+        }
+    }
+
+    func quit(_ a: MemApp) {
+        a.app.terminate()
+        memoryApps.removeAll { $0.id == a.id }     // optimistic; the next refresh confirms
     }
 
     func openNetwork() {

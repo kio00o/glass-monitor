@@ -167,6 +167,7 @@ enum Sensors {
 
     /// True while Spotify is producing sound.
     static func audioPlaying() -> Bool {
+        guard #available(macOS 14.2, *) else { return false }   // per-process audio state needs 14.2
         var a = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList,
                                            mScope: kAudioObjectPropertyScopeGlobal,
                                            mElement: kAudioObjectPropertyElementMain)

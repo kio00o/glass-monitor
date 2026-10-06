@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "GlassMonitor",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
             name: "GlassMonitor",
