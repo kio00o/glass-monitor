@@ -1,0 +1,4 @@
+Eye animations are Taby character artwork by TRIIIS LABS
+(https://github.com/TRIIIS-LABS/firmware-taby), used under the Taby Artwork Terms
+in LICENSE-TABY.txt. Modifications: rotated 90 degrees, cropped, and rendered
+white-on-transparent. Not an official Taby product.
