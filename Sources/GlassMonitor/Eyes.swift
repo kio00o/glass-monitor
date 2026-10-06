@@ -1,5 +1,6 @@
 import SwiftUI
 import ImageIO
+import CoreGraphics
 
 /// A decoded GIF: white-on-transparent frames (luminance → alpha), cropped to the face area.
 struct EyeClip {
@@ -61,6 +62,20 @@ final class EyesModel: ObservableObject {
     private var task: Task<Void, Never>?
     private var wasListening = false
 
+    // Boredom: nothing touched for a while → the mascot entertains itself, then falls asleep.
+    private var lastActive = Date()
+    private static let boredAfter: TimeInterval = 20
+    private static let sleepAfter: TimeInterval = 15 * 60
+    private static let activities: [(String, Int)] = [
+        ("basketball_throw", 1), ("basketball_dunk", 1), ("boxing", 1), ("fishing_short", 1),
+        ("stretching", 1), ("drink_water", 1), ("flower_grow", 1), ("f1_car", 1),
+    ]
+    private var inactive: TimeInterval { Date().timeIntervalSince(lastActive) }
+
+    private static func systemIdle() -> TimeInterval {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+    }
+
     /// Return (clip, repeats) to override the random behaviour, e.g. angry when the CPU is stressed.
     var mood: () -> (String, Int)? = { nil }
     /// True while music/audio is playing; the mascot then wears headphones.
@@ -75,6 +90,30 @@ final class EyesModel: ObservableObject {
     func start() {
         guard task == nil else { return }
         task = Task { await loop() }
+    }
+
+    private var isAsleep = false
+
+    /// The panel was closed: the mascot dozes off.
+    func sleep() {
+        guard !isAsleep else { return }
+        isAsleep = true
+        task?.cancel()
+        task = Task { while !Task.isCancelled { await play("sleeping_loop", 1) } }
+    }
+
+    /// The panel was opened: if the mascot was asleep it is seen sleeping for a moment, then wakes with a start.
+    func wake() {
+        let wasAsleep = isAsleep || inactive > Self.sleepAfter
+        isAsleep = false
+        lastActive = Date()
+        guard wasAsleep else { return }
+        task?.cancel()
+        task = Task {
+            try? await Task.sleep(for: .seconds(0.9))      // the panel slides in while it still sleeps
+            await play("wow", 1)
+            await loop()
+        }
     }
 
     /// Tap on the panel: react right away.
@@ -118,6 +157,8 @@ final class EyesModel: ObservableObject {
 
     private func loop() async {
         while !Task.isCancelled {
+            if Self.systemIdle() < 10 { lastActive = Date() }
+            if inactive <= Self.sleepAfter { isAsleep = false }
             let now = listening()
             if now != wasListening {                 // music just started or stopped
                 wasListening = now
@@ -125,8 +166,12 @@ final class EyesModel: ObservableObject {
                 continue
             }
             if now { await play("listening_music_loop", 1, interruptible: true); continue }
+            if inactive > Self.sleepAfter { isAsleep = true; await play("sleeping_loop", 2); continue }
             await play("idle_01_loop", 1, interruptible: true)
             if let m = mood() { await play(m.0, m.1); continue }
+            if inactive > Self.boredAfter, Double.random(in: 0..<1) < 0.85, let a = Self.activities.randomElement() {
+                await play(a.0, a.1); continue
+            }
             if Double.random(in: 0..<1) < 0.6, let e = Self.emotions.randomElement() {
                 await play(e.0, e.1)
             }
@@ -149,6 +194,10 @@ final class EyesModel: ObservableObject {
             try? await Task.sleep(for: .seconds(step))
             remaining -= step
             if interruptible && listening() != wasListening { return }   // music started/stopped
+            if name == "idle_01_loop" {                                       // keep an eye on user activity during the calm loop
+                if Self.systemIdle() < 5 { lastActive = Date() }
+                else if inactive > Self.boredAfter { return }                  // bored: cut the calm loop short
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Builds GlassMonitor.app (ad-hoc signed) next to this script.
 set -e
-VERSION=1.2.1
+VERSION=1.3.0
 cd "$(dirname "$0")"
 # one build per architecture (no full Xcode needed), then merge into a universal binary
 swift build -c release --triple arm64-apple-macosx14.0

@@ -124,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func show() {
+        eyes.wake()
         host.view.layoutSubtreeIfNeeded()
         let size = host.view.fittingSize
         panel.setContentSize(size)
@@ -150,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard visible else { return }
         visible = false
         lastHide = Date()
+        eyes.sleep()
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
         var out = panel.frame
         out.origin.x += out.width + 40
