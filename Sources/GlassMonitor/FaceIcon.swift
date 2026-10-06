@@ -55,10 +55,10 @@ enum FaceIcon {
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         let body = CGRect(x: s * 0.098, y: s * 0.098, width: s * 0.804, height: s * 0.804)
         let shape = NSBezierPath(roundedRect: body, xRadius: s * 0.18, yRadius: s * 0.18)
-        NSGradient(starting: NSColor(white: 0.20, alpha: 1), ending: NSColor(white: 0.03, alpha: 1))!.draw(in: shape, angle: -90)
-        NSColor(white: 1, alpha: 0.16).setStroke()
+        NSColor.black.setFill(); shape.fill()
+        NSColor(white: 1, alpha: 0.14).setStroke()
         shape.lineWidth = s * 0.004; shape.stroke()
-        draw(in: body.insetBy(dx: s * 0.13, dy: s * 0.2), color: .white)
+        drawEyesOnly(in: body.insetBy(dx: s * 0.2, dy: s * 0.24), blink: 1, look: 0, color: .white)
         NSGraphicsContext.restoreGraphicsState()
         return rep
     }
