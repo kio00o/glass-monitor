@@ -33,11 +33,10 @@ final class Monitor: ObservableObject {
 
     private var timer: Timer?
 
-    // Spotify / Apple Music announce play-state changes; paused apps still keep the audio device open,
+    // Spotify announces play-state changes; paused apps still keep the audio device open,
     // so the device alone can't tell "paused" from "playing".
     private static let players: [(bundle: String, notification: String)] = [
         ("com.spotify.client", "com.spotify.client.PlaybackStateChanged"),
-        ("com.apple.Music", "com.apple.Music.playerInfo"),
     ]
     private var playerState: [String: String] = [:]    // bundle id → "Playing" / "Paused" / "Stopped"
     private let location = CLLocationManager()
@@ -153,6 +152,7 @@ final class Monitor: ObservableObject {
                 if let result {
                     self.claude = result
                     self.saveClaudeCache(result)
+                    Notifier.shared.check(result)
                     self.claudeInterval = 300
                 } else {
                     self.claudeInterval = min(self.claudeInterval * 2, 1800)   // 5 → 10 → 20 → 30 min

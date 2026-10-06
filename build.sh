@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Builds GlassMonitor.app (ad-hoc signed) next to this script.
 set -e
+VERSION=1.1.0
 cd "$(dirname "$0")"
 swift build -c release
 APP=GlassMonitor.app
@@ -17,7 +18,8 @@ cat > $APP/Contents/Info.plist <<PL
 <key>CFBundleIdentifier</key><string>dev.local.glassmonitor</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>CFBundleShortVersionString</key><string>$VERSION</string>
+<key>CFBundleVersion</key><string>$VERSION</string>
 <key>LSMinimumSystemVersion</key><string>26.0</string>
 <key>NSHighResolutionCapable</key><true/><key>LSUIElement</key><true/>
 <key>NSLocationWhenInUseUsageDescription</key><string>Needed to read the name of the Wi-Fi network you are connected to.</string>

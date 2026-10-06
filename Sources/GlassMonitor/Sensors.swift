@@ -152,20 +152,36 @@ enum Sensors {
     static func linkRate() -> Int { Int(CWWiFiClient.shared().interface()?.transmitRate() ?? 0) }
 
     // MARK: Audio output
-    /// True while any app is playing sound through the default output device.
+    /// Only Spotify counts as "listening". Other processes (browsers, live wallpapers, system daemons)
+    /// can hold an output stream open in silence or play unrelated sound.
+    private static let mediaApps = ["com.spotify.client"]
+
+    private static func audioValue<T>(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector, _ initial: T) -> T {
+        var a = AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal,
+                                           mElement: kAudioObjectPropertyElementMain)
+        var v = initial
+        var size = UInt32(MemoryLayout<T>.size)
+        AudioObjectGetPropertyData(obj, &a, 0, nil, &size, &v)
+        return v
+    }
+
+    /// True while Spotify is producing sound.
     static func audioPlaying() -> Bool {
-        var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-                                              mScope: kAudioObjectPropertyScopeGlobal,
-                                              mElement: kAudioObjectPropertyElementMain)
-        var dev = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &dev) == noErr,
-              dev != 0 else { return false }
-        addr.mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere
-        var running: UInt32 = 0
-        size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &running) == noErr else { return false }
-        return running != 0
+        var a = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList,
+                                           mScope: kAudioObjectPropertyScopeGlobal,
+                                           mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        let sys = AudioObjectID(kAudioObjectSystemObject)
+        guard AudioObjectGetPropertyDataSize(sys, &a, 0, nil, &size) == noErr, size > 0 else { return false }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(sys, &a, 0, nil, &size, &ids) == noErr else { return false }
+        for id in ids {
+            let out: UInt32 = audioValue(id, kAudioProcessPropertyIsRunningOutput, 0)
+            guard out != 0 else { continue }
+            let bundle: Unmanaged<CFString>? = audioValue(id, kAudioProcessPropertyBundleID, nil)
+            if let b = bundle?.takeRetainedValue() as String?, mediaApps.contains(where: { b.hasPrefix($0) }) { return true }
+        }
+        return false
     }
 
     // MARK: Bluetooth

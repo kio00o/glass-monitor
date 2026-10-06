@@ -34,6 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        Notifier.shared.setup()
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("dev.local.glassmonitor.test"),
+                                                            object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { Notifier.shared.sendTest() }
+        }
 
         // Start at login once; afterwards the right-click menu controls it.
         if !UserDefaults.standard.bool(forKey: "loginItemOffered") {
