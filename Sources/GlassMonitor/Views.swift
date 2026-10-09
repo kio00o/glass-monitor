@@ -232,7 +232,8 @@ struct ContentView: View {
             let w = m.claude?.fiveHour
             HStack(alignment: .top, spacing: 10) {
                 ClaudeMark()
-                UsageBar(title: "Session (5hr)", percent: w?.percent, resetsAt: w?.resetsAt, compact: true)
+                UsageBar(title: "Session (5hr)", percent: m.claude == nil ? nil : (w?.percent ?? 0), resetsAt: w?.resetsAt,
+                         compact: true, emptyText: m.claude == nil ? "No data yet" : "No active session")
             }
         }
         .contentShape(.rect(cornerRadius: 16))
@@ -484,6 +485,7 @@ private struct UsageBar: View {
     let percent: Double?
     let resetsAt: Date?
     var compact = false
+    var emptyText = "No data yet"
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 8) {
@@ -503,7 +505,7 @@ private struct UsageBar: View {
                 }
             }
             .frame(height: compact ? 6 : 8)
-            Subtitle(text: resetsAt.map { "Resets in \(formatReset($0, long: !compact))" } ?? "No data yet")
+            Subtitle(text: resetsAt.map { "Resets in \(formatReset($0, long: !compact))" } ?? emptyText)
         }
     }
 }
@@ -534,11 +536,13 @@ private struct ClaudePage: View {
                 EyesPanel().frame(height: 84)
                 box {
                     let w = m.claude?.fiveHour
-                    UsageBar(title: "Session (5hr)", percent: w?.percent, resetsAt: w?.resetsAt)
+                    UsageBar(title: "Session (5hr)", percent: m.claude == nil ? nil : (w?.percent ?? 0), resetsAt: w?.resetsAt,
+                             emptyText: m.claude == nil ? "No data yet" : "No active session")
                 }
                 box {
                     let w = m.claude?.sevenDay
-                    UsageBar(title: "Weekly (7 days)", percent: w?.percent, resetsAt: w?.resetsAt)
+                    UsageBar(title: "Weekly (7 days)", percent: m.claude == nil ? nil : (w?.percent ?? 0), resetsAt: w?.resetsAt,
+                             emptyText: m.claude == nil ? "No data yet" : "No active window")
                 }
             }
             .padding(12)

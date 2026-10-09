@@ -57,6 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.statusItem.button?.image = $0
         }.store(in: &cancellables)
 
+        // "14% · 3h" next to the icon: session usage and time until it resets.
+        monitor.$claude.receive(on: DispatchQueue.main).sink { [weak self] _ in self?.updateStatusTitle() }
+            .store(in: &cancellables)
+        Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+            .sink { [weak self] _ in self?.updateStatusTitle() }.store(in: &cancellables)
+
         host = NSHostingController(rootView: AnyView(PanelRoot().environmentObject(monitor).environmentObject(eyes)))
         host.sizingOptions = [.preferredContentSize]
         host.view.wantsLayer = true
@@ -82,6 +88,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: Status-bar limit text
+
+    private static let showLimitKey = "showLimitInBar"
+    private var showLimit: Bool { UserDefaults.standard.object(forKey: Self.showLimitKey) as? Bool ?? true }
+
+    private func updateStatusTitle() {
+        guard let b = statusItem?.button else { return }
+        guard showLimit, let limits = monitor.claude else {
+            b.attributedTitle = NSAttributedString(string: "")
+            return
+        }
+        var text = " Session 0%"                                   // no active session = nothing used yet
+        if let w = limits.fiveHour, w.resetsAt > Date() {
+            let mins = max(0, Int(w.resetsAt.timeIntervalSinceNow / 60))
+            text = " Session \(Int(w.percent.rounded()))% · \(mins >= 60 ? "\(mins / 60)h" : "\(mins)m")"
+        }
+        b.imagePosition = .imageLeft
+        b.attributedTitle = NSAttributedString(
+            string: text, attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)])
+    }
+
+    @objc private func toggleShowLimit() {
+        UserDefaults.standard.set(!showLimit, forKey: Self.showLimitKey)
+        updateStatusTitle()
+    }
+
     // MARK: Clicks
 
     @objc private func statusClicked() {
@@ -98,6 +130,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         login.target = self
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
+        let limit = NSMenuItem(title: "Show Claude Limit in Menu Bar", action: #selector(toggleShowLimit), keyEquivalent: "")
+        limit.target = self
+        limit.state = showLimit ? .on : .off
+        menu.addItem(limit)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Glass Monitor", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
