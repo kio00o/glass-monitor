@@ -21,6 +21,15 @@ Anthropic for your 5-hour / 7-day usage. macOS will ask once to allow access —
 Install and sign in to Claude Code on the Mac first; without it the card just shows "No data yet".
 These endpoints are undocumented and may change.
 
+### Air-raid alerts (Ukraine)
+
+During an air-raid alert in your area the menu-bar eyes turn yellow, the mascot gets a fright and then puts on boxing gloves, and a card at the bottom of the panel shows the area, the threat level and what is flying nearby.
+Your oblast / raion / hromada is detected from the Mac's location (matched locally — the location never leaves the Mac) or picked by hand: right-click the menu-bar icon → **Air Alert Region**.
+
+Data: active alerts from [siren.pp.ua](https://siren.pp.ua) (a public mirror of the official "Повітряна тривога" / ukrainealarm.com API), threat details from the [alerts.in.ua live report](https://alerts.in.ua/llms.txt), which it allows fetching without a token (only while an alert is active, at most once a minute).
+
+**This is not an official warning system.** The Mac may be asleep or offline and third-party services can lag or stop working — always rely on the official "Повітряна тривога" app and sirens.
+
 ## Build
 
 ```

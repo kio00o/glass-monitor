@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let monitor = Monitor()
     private let eyes = EyesModel()
     private let menuIcon = MenuIconModel()
+    private let airAlerts = AirAlertMonitor()
 
     private var statusItem: NSStatusItem!
     private var panel: Panel!
@@ -57,13 +58,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.statusItem.button?.image = $0
         }.store(in: &cancellables)
 
+        // Yellow menu-bar eyes while there is an air-raid alert in the user's area.
+        airAlerts.$alert.receive(on: DispatchQueue.main).sink { [weak self] in self?.menuIcon.alert = $0 != nil }
+            .store(in: &cancellables)
+        airAlerts.start()
+        eyes.alarmed = { [airAlerts] in airAlerts.alert != nil }
+        airAlerts.$alert.map { $0 != nil }.removeDuplicates().dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.eyes.nudge() }.store(in: &cancellables)
+
         // "14% · 3h" next to the icon: session usage and time until it resets.
         monitor.$claude.receive(on: DispatchQueue.main).sink { [weak self] _ in self?.updateStatusTitle() }
             .store(in: &cancellables)
         Timer.publish(every: 30, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in self?.updateStatusTitle() }.store(in: &cancellables)
 
-        host = NSHostingController(rootView: AnyView(PanelRoot().environmentObject(monitor).environmentObject(eyes)))
+        host = NSHostingController(rootView: AnyView(PanelRoot().environmentObject(monitor).environmentObject(eyes).environmentObject(airAlerts)))
         host.sizingOptions = [.preferredContentSize]
         host.view.wantsLayer = true
         host.view.layer?.backgroundColor = .clear
@@ -86,6 +95,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.hide() }
         }
+    }
+
+    // MARK: Air-raid region
+
+    private func alertRegionMenu() -> NSMenuItem {
+        let root = NSMenuItem(title: "Air Alert Region", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let manual = airAlerts.manualRegionId
+        let autoTitle = "Automatic — " + (airAlerts.autoPlace?.label ?? "locating…")
+        let auto = NSMenuItem(title: autoTitle, action: #selector(pickAlertRegion(_:)), keyEquivalent: "")
+        auto.target = self; auto.representedObject = nil
+        auto.state = manual == nil ? .on : .off
+        sub.addItem(auto)
+        sub.addItem(.separator())
+        for state in airAlerts.states {
+            let item = NSMenuItem(title: state.name, action: nil, keyEquivalent: "")
+            let districts = airAlerts.districtsByState[state.id] ?? []
+            let sm = NSMenu()
+            let whole = NSMenuItem(title: districts.isEmpty ? state.name : "Уся область", action: #selector(pickAlertRegion(_:)), keyEquivalent: "")
+            whole.target = self; whole.representedObject = state.id
+            whole.state = manual == state.id ? .on : .off
+            sm.addItem(whole)
+            if !districts.isEmpty { sm.addItem(.separator()) }
+            for d in districts {
+                let di = NSMenuItem(title: d.name, action: #selector(pickAlertRegion(_:)), keyEquivalent: "")
+                di.target = self; di.representedObject = d.id
+                di.state = manual == d.id ? .on : .off
+                sm.addItem(di)
+            }
+            let chosenHere = manual.flatMap { airAlerts.region($0) }?.stateId == state.id
+            item.state = chosenHere ? .mixed : .off
+            item.submenu = sm
+            sub.addItem(item)
+        }
+        root.submenu = sub
+        return root
+    }
+
+    @objc private func pickAlertRegion(_ sender: NSMenuItem) {
+        airAlerts.manualRegionId = sender.representedObject as? String
     }
 
     // MARK: Status-bar limit text
@@ -134,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         limit.target = self
         limit.state = showLimit ? .on : .off
         menu.addItem(limit)
+        menu.addItem(alertRegionMenu())
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Glass Monitor", action: #selector(quit), keyEquivalent: "q")
         quit.target = self

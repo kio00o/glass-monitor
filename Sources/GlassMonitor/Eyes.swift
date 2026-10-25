@@ -13,11 +13,19 @@ struct EyeClip {
         let i = ends.firstIndex { $0 > t } ?? frames.count - 1
         return frames[i]
     }
+
+    /// A part of the clip, by fraction of its length (e.g. just the "hands on cheeks" middle of `wow`).
+    func slice(_ from: Double, _ to: Double) -> EyeClip {
+        let a = ends.firstIndex { $0 > total * from } ?? 0
+        let b = max(a, (ends.firstIndex { $0 >= total * to } ?? frames.count - 1))
+        let base = a > 0 ? ends[a - 1] : 0
+        return EyeClip(frames: Array(frames[a...b]), ends: ends[a...b].map { $0 - base })
+    }
 }
 
 enum EyeLoader {
     // Taby art is 280×456 with the face rotated 90°; keep only the face area.
-    static let cropX = 0, cropY = 0, cropW = 256, cropH = 456
+    static let cropX = 0, cropY = 0, cropW = 280, cropH = 456
 
     static func load(_ name: String) -> EyeClip? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "gif", subdirectory: "Taby"),
@@ -80,6 +88,10 @@ final class EyesModel: ObservableObject {
     var mood: () -> (String, Int)? = { nil }
     /// True while music/audio is playing; the mascot then wears headphones.
     var listening: () -> Bool = { false }
+    /// True during an air-raid alert in the user's area: the mascot gets a fright, then boxes.
+    var alarmed: () -> Bool = { false }
+    private var wasAlarmed = false
+    private(set) var trembling = false
 
     private static let emotions: [(String, Int)] = [
         ("wow", 1), ("blush", 1), ("love_01", 1), ("thumbs_up", 1), ("yeah", 1),
@@ -96,6 +108,7 @@ final class EyesModel: ObservableObject {
 
     /// The panel was closed: the mascot dozes off.
     func sleep() {
+        trembling = false
         guard !isAsleep else { return }
         isAsleep = true
         task?.cancel()
@@ -155,10 +168,30 @@ final class EyesModel: ObservableObject {
         task = Task { await loop() }
     }
 
+    /// Something important changed (alert started/ended): re-decide right away instead of finishing the clip.
+    func nudge() {
+        guard !isAsleep else { return }      // closed panel: it will catch up on wake
+        task?.cancel()
+        task = Task { await loop() }
+    }
+
     private func loop() async {
         while !Task.isCancelled {
             if Self.systemIdle() < 10 { lastActive = Date() }
             if inactive <= Self.sleepAfter { isAsleep = false }
+
+            // Air-raid alert beats everything: a trembling startle first…
+            let alarm = alarmed()
+            if alarm != wasAlarmed {
+                wasAlarmed = alarm
+                trembling = alarm
+                await play(alarm ? "wow" : "relaxing_01_loop", 1)    // 😱 / phew
+                continue
+            }
+            // then puts the gloves on and fights back (the punching middle of `boxing`)
+            if alarm { trembling = false; await play("boxing", 1, interruptible: true, slice: (0.2, 0.85)); continue }
+            trembling = false
+
             let now = listening()
             if now != wasListening {                 // music just started or stopped
                 wasListening = now
@@ -178,7 +211,7 @@ final class EyesModel: ObservableObject {
         }
     }
 
-    private func play(_ name: String, _ times: Int, interruptible: Bool = false) async {
+    private func play(_ name: String, _ times: Int, interruptible: Bool = false, slice: (Double, Double)? = nil) async {
         let c: EyeClip
         if let hit = cache[name] { c = hit }
         else if let loaded = await Task.detached(operation: { EyeLoader.load(name) }).value { c = loaded }
@@ -186,14 +219,15 @@ final class EyesModel: ObservableObject {
         if name != "idle_01_loop" && cache.count > 3 { cache = cache.filter { $0.key == "idle_01_loop" } }
         cache[name] = c
         guard !Task.isCancelled else { return }   // a newer request took over while this one was loading
-        clip = c; repeats = times; clipStart = Date()
-        let wasListening = listening()
-        var remaining = c.total * Double(times)
+        let shown = slice.map { c.slice($0.0, $0.1) } ?? c
+        clip = shown; repeats = times; clipStart = Date()
+        let wasListening = listening(), alarmAtStart = alarmed()
+        var remaining = shown.total * Double(times)
         while remaining > 0 && !Task.isCancelled {
             let step = min(remaining, 0.4)
             try? await Task.sleep(for: .seconds(step))
             remaining -= step
-            if interruptible && listening() != wasListening { return }   // music started/stopped
+            if interruptible && (listening() != wasListening || alarmed() != alarmAtStart) { return }   // music / alert changed
             if name == "idle_01_loop" {                                       // keep an eye on user activity during the calm loop
                 if Self.systemIdle() < 5 { lastActive = Date() }
                 else if inactive > Self.boredAfter { return }                  // bored: cut the calm loop short
@@ -223,6 +257,7 @@ struct EyesPanel: View {
                         .foregroundStyle(Color.primary)
                         .frame(width: CGFloat(EyeLoader.cropW) * s, height: CGFloat(EyeLoader.cropH) * s)
                         .rotationEffect(.degrees(-90))
+                        .offset(shake(ctx.date))
                         .frame(width: g.size.width, height: g.size.height)
                 }
             }
@@ -232,4 +267,13 @@ struct EyesPanel: View {
         .contentShape(.rect(cornerRadius: 16))
         .onTapGesture { eyes.poke() }
     }
+
+    /// Nervous trembling during an alert: fast small jitter, in bursts.
+    private func shake(_ date: Date) -> CGSize {
+        guard eyes.trembling else { return .zero }
+        let t = date.timeIntervalSinceReferenceDate
+        let amp = sin(t * 1.7) > 0.2 ? 1.8 : 0.6
+        return CGSize(width: sin(t * 53) * amp, height: cos(t * 41) * amp * 0.6)
+    }
 }
+

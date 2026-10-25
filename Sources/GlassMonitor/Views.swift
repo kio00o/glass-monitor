@@ -149,6 +149,7 @@ struct ContentView: View {
                         wifi.frame(height: 160)
                         VStack(spacing: 10) { battery.frame(height: 75); devices.frame(height: 75) }
                     }
+                    AirAlertCard()
                 }
                 .padding(12)
                 .background {
@@ -678,5 +679,67 @@ private struct MemoryChipIcon: View {
         }
         .foregroundStyle(Color.primary)
         .frame(width: 30, height: 30)
+    }
+}
+
+
+// MARK: - Air-raid alert card
+
+private struct AirAlertCard: View {
+    @EnvironmentObject var air: AirAlertMonitor
+
+    private static let yellow = Color(red: 1, green: 0.84, blue: 0.04)
+    private static let red = Color(red: 1, green: 0.27, blue: 0.23)
+
+    var body: some View {
+        let a = air.alert
+        let accent = a.map { $0.red ? Self.red : Self.yellow }
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                if a != nil {
+                    Image(nsImage: RocketIcon.image()).resizable().frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: "checkmark.shield").font(.system(size: 18)).foregroundStyle(Color.primary.opacity(0.62))
+                }
+            }
+            .frame(width: 30, height: 30)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Title(text: a == nil ? "Тривоги немає" : "Повітряна тривога")
+                    Spacer(minLength: 6)
+                    if let since = a?.since {
+                        Text("з \(since.formatted(date: .omitted, time: .shortened))")
+                            .font(.system(size: 11.5, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(accent ?? Color.primary)
+                    }
+                }
+                if let a {
+                    Subtitle(text: a.regionName)
+                    Text(a.reason ?? (a.red ? "Червоний рівень" : "Жовтий рівень"))
+                        .font(.system(size: 11.5, weight: .medium)).foregroundStyle(accent ?? Color.primary)
+                    if !a.threats.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(a.threats, id: \.self) { t in
+                                Text(t).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.75))
+                                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                } else {
+                    Subtitle(text: air.watchedLabel ?? "Визначаю регіон…")
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(.rect(cornerRadius: 16))
+        .overlay {
+            if let accent { RoundedRectangle(cornerRadius: 16).strokeBorder(accent.opacity(0.55), lineWidth: 1) }
+        }
+        .contentShape(.rect(cornerRadius: 16))
+        .onTapGesture { NSWorkspace.shared.open(URL(string: "https://alerts.in.ua")!) }
+        .animation(.easeInOut(duration: 0.25), value: a)
     }
 }

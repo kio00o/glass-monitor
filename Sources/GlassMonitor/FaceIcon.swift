@@ -37,12 +37,13 @@ enum FaceIcon {
     }
 
     /// Menu-bar image (template, so macOS tints it for light/dark bars).
-    static func menuBar(blink: CGFloat, look: CGFloat) -> NSImage {
+    /// `tint` = nil: template image (macOS colours it for the bar); otherwise drawn in that colour (alerts).
+    static func menuBar(blink: CGFloat, look: CGFloat, tint: NSColor? = nil) -> NSImage {
         let img = NSImage(size: NSSize(width: 28, height: 18), flipped: false) { rect in
-            drawEyesOnly(in: rect.insetBy(dx: 2, dy: 2), blink: blink, look: look, color: .black)
+            drawEyesOnly(in: rect.insetBy(dx: 2, dy: 2), blink: blink, look: look, color: tint ?? .black)
             return true
         }
-        img.isTemplate = true
+        img.isTemplate = tint == nil
         return img
     }
 

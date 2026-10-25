@@ -1,13 +1,19 @@
 #!/bin/zsh
 # Builds GlassMonitor.app (ad-hoc signed) next to this script.
 set -e
-VERSION=1.4.0
+VERSION=1.5.0
 cd "$(dirname "$0")"
-# one build per architecture (no full Xcode needed), then merge into a universal binary
-swift build -c release --triple arm64-apple-macosx14.0
-swift build -c release --triple x86_64-apple-macosx14.0
+# One build per architecture (no full Xcode needed), then merge into a universal binary.
+# Ask SwiftPM where it put each binary: newer toolchains moved it (.build/out/Products/Release)
+# and both triples share that folder, so copy each one right after its build and check its arch.
 mkdir -p .build/universal
-lipo -create .build/arm64-apple-macosx/release/GlassMonitor .build/x86_64-apple-macosx/release/GlassMonitor -output .build/universal/GlassMonitor
+for ARCH in arm64 x86_64; do
+  swift build -c release --triple $ARCH-apple-macosx14.0
+  BIN="$(swift build -c release --triple $ARCH-apple-macosx14.0 --show-bin-path)/GlassMonitor"
+  [ "$(lipo -archs "$BIN")" = "$ARCH" ] || { echo "error: $BIN is not $ARCH"; exit 1; }
+  cp "$BIN" .build/universal/GlassMonitor-$ARCH
+done
+lipo -create .build/universal/GlassMonitor-arm64 .build/universal/GlassMonitor-x86_64 -output .build/universal/GlassMonitor
 APP=GlassMonitor.app
 rm -rf $APP && mkdir -p $APP/Contents/MacOS
 cp .build/universal/GlassMonitor $APP/Contents/MacOS/

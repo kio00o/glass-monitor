@@ -5,12 +5,20 @@ import SwiftUI
 final class MenuIconModel: ObservableObject {
     @Published private(set) var image = FaceIcon.menuBar(blink: 1, look: 0)
     private var cache: [String: NSImage] = [:]
+    private var current: (CGFloat, CGFloat) = (1, 0)
+
+    /// Yellow eyes while there is an air-raid alert in the user's area.
+    var alert = false {
+        didSet { if alert != oldValue { show(current.0, current.1) } }
+    }
+    private static let yellow = NSColor(srgbRed: 1, green: 0.84, blue: 0.04, alpha: 1)
 
     init() { Task { await run() } }
 
     private func show(_ blink: CGFloat, _ look: CGFloat) {
-        let key = "\(blink)|\(look)"
-        if cache[key] == nil { cache[key] = FaceIcon.menuBar(blink: blink, look: look) }
+        current = (blink, look)
+        let key = "\(blink)|\(look)|\(alert)"
+        if cache[key] == nil { cache[key] = FaceIcon.menuBar(blink: blink, look: look, tint: alert ? Self.yellow : nil) }
         image = cache[key]!
     }
 
