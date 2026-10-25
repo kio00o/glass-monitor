@@ -91,9 +91,20 @@ enum FaceIcon {
                      xRadius: 0.4 * k, yRadius: 0.4 * k).fill()                                    // propeller
     }
 
-    static func drone(size: CGFloat = 18) -> NSImage {
-        let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            drawDrone(in: rect.insetBy(dx: 0.5, dy: 0.5)); return true
+    static let alertRed = NSColor(srgbRed: 1, green: 0.27, blue: 0.23, alpha: 1)
+
+    /// Drone in `color` (menu bar: black/white to match the bar) with a severity dot on its side (`dot`).
+    /// `dot` = nil draws the drone alone (yellow by default, for the glass card inside the window).
+    static func drone(size: CGFloat = 18, color: NSColor = alertColor, dot: NSColor? = nil) -> NSImage {
+        let w = dot == nil ? size : size + 6
+        let img = NSImage(size: NSSize(width: w, height: size), flipped: false) { rect in
+            drawDrone(in: NSRect(x: 0, y: 0, width: size, height: size).insetBy(dx: 0.5, dy: 0.5), color: color)
+            if let dot {
+                dot.setFill()
+                let d = size / 3
+                NSBezierPath(ovalIn: NSRect(x: size - 1, y: size * 0.62, width: d, height: d)).fill()
+            }
+            return true
         }
         img.isTemplate = false
         return img

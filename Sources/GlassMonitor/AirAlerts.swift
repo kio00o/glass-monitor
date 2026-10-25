@@ -269,8 +269,14 @@ final class AirAlertMonitor: NSObject, ObservableObject, CLLocationManagerDelega
                 relevant = { eid in eid == r.stateId || eid == r.id }
             }
         } else if let p = autoPlace {
-            let ids = Set([p.stateId, p.districtId, p.communityId].compactMap { $0 } + p.extraIds)
-            relevant = { ids.contains($0) }
+            if p.districtId == nil, let state = p.stateId {
+                // location only resolved to oblast level → count any alert inside that oblast (incl. its raions/hromadas)
+                let extra = Set(p.extraIds)
+                relevant = { [regions] eid in eid == state || regions[eid]?.stateId == state || extra.contains(eid) }
+            } else {
+                let ids = Set([p.stateId, p.districtId, p.communityId].compactMap { $0 } + p.extraIds)
+                relevant = { ids.contains($0) }
+            }
         }
 
         var found: ActiveAlert?

@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let airAlerts = AirAlertMonitor()
     private var droneItem: NSStatusItem?
     private var droneTask: Task<Void, Never>?
+    private var alertRed = false
 
     private var statusItem: NSStatusItem!
     private var panel: Panel!
@@ -61,10 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.store(in: &cancellables)
 
         // Yellow menu-bar eyes while there is an air-raid alert in the user's area.
-        airAlerts.$alert.map { $0 != nil }.removeDuplicates().receive(on: DispatchQueue.main).sink { [weak self] on in
-            self?.menuIcon.alert = on        // angry, lowered eyes
-            self?.showDrone(on)              // orange drone slides in next to them
+        airAlerts.$alert.receive(on: DispatchQueue.main).sink { [weak self] alert in
+            self?.menuIcon.alert = alert != nil      // angry, lowered eyes
+            self?.alertRed = alert?.red ?? false
+            self?.showDrone(alert != nil)            // drone slides in next to them; dot shows severity
         }.store(in: &cancellables)
+        // redraw the drone (black/white) when the menu-bar appearance flips
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+                                                            object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshDroneImage() }
+        }
         airAlerts.start()
         eyes.alarmed = { [airAlerts] in airAlerts.alert != nil }
         airAlerts.$alert.map { $0 != nil }.removeDuplicates().dropFirst().receive(on: DispatchQueue.main)
@@ -107,12 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         droneTask?.cancel()
         if on && droneItem == nil {
             let item = NSStatusBar.system.statusItem(withLength: 0)   // created after the eyes → sits to their left
-            item.button?.image = FaceIcon.drone()
             item.button?.imageScaling = .scaleNone
             item.button?.target = self
             item.button?.action = #selector(openAlertsPage)
             droneItem = item
         }
+        if on { refreshDroneImage() }
         guard let item = droneItem else { return }
         let from = item.length, to: CGFloat = on ? 24 : 0
         droneTask = Task {
@@ -124,6 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if !on, !Task.isCancelled { NSStatusBar.system.removeStatusItem(item); droneItem = nil }
         }
+    }
+
+    /// Draw the drone black or white to match the current menu bar, with a red/yellow severity dot.
+    private func refreshDroneImage() {
+        guard let button = droneItem?.button else { return }
+        let dark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let dot = alertRed ? FaceIcon.alertRed : FaceIcon.alertColor
+        button.image = FaceIcon.drone(size: 18, color: dark ? .white : .black, dot: dot)
     }
 
     @objc private func openAlertsPage() {

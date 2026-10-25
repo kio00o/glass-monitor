@@ -715,7 +715,8 @@ private struct AirAlertCard: View {
         HStack(alignment: .top, spacing: 10) {
             Group {
                 if a != nil {
-                    Image(nsImage: FaceIcon.drone(size: 22)).resizable().frame(width: 22, height: 22)
+                    Image(nsImage: FaceIcon.drone(size: 22, color: a!.red ? FaceIcon.alertRed : FaceIcon.alertColor))
+                        .resizable().frame(width: 22, height: 22)
                 } else {
                     Image(systemName: "checkmark.shield").font(.system(size: 18)).foregroundStyle(Color.primary.opacity(0.62))
                 }
@@ -796,7 +797,10 @@ private struct AlertsPage: View {
                     Text(active == 0 ? "Тривог немає" : "Тривога в \(active) обл.")
                         .font(.system(size: 11.5)).foregroundStyle(active == 0 ? Color.primary.opacity(0.62) : alertColor)
                 }
-                EyesPanel().frame(height: 84)
+                HStack(alignment: .top, spacing: 10) {
+                    EyesPanel().frame(width: 120, height: 84)
+                    myRegionCard
+                }
                 VStack(alignment: .leading, spacing: 10) {
                     if let map = UkraineMap.shared {
                         // fixed size: a flexible map lets the window shrink when the hover label appears
@@ -827,6 +831,47 @@ private struct AlertsPage: View {
             }
             .padding(12)
         }
+    }
+
+    /// Details about the user's own oblast, shown next to the mascot above the map.
+    private var myRegionCard: some View {
+        let a = air.alert
+        let o = air.watchedOblast.flatMap { air.oblasts[$0] }
+        let accent = a.map { $0.red ? Color(nsColor: FaceIcon.alertRed) : alertColor }
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: a == nil ? "checkmark.shield" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 12)).foregroundStyle(accent ?? Color.primary.opacity(0.55))
+                Text(air.watchedLabel ?? "Регіон не визначено")
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.primary).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            if let a {
+                Text(a.reason ?? (a.red ? "Ракетна небезпека" : "Повітряна тривога"))
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(accent ?? Color.primary)
+                HStack(spacing: 8) {
+                    if let since = a.since { pill("з " + ukTime(since)) }
+                    if let o, !o.whole, o.areas > 0 { pill("\(o.areas) р-н\(o.areas == 1 ? "" : "и")") }
+                }
+                if let t = a.threats.first {
+                    Text(t).font(.system(size: 10)).foregroundStyle(Color.primary.opacity(0.7))
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 1)
+                }
+            } else {
+                Text("Тривоги немає").font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+        .glass(.rect(cornerRadius: 16))
+        .overlay { if let accent { RoundedRectangle(cornerRadius: 16).strokeBorder(accent.opacity(0.5), lineWidth: 1) } }
+    }
+
+    private func pill(_ text: String) -> some View {
+        Text(text).font(.system(size: 10, weight: .medium)).monospacedDigit()
+            .foregroundStyle(Color.primary.opacity(0.75))
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Color.primary.opacity(0.1), in: .capsule)
     }
 
     private func legend(_ c: Color, _ text: String) -> some View {

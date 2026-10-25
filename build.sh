@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Builds GlassMonitor.app (ad-hoc signed) next to this script.
 set -e
-VERSION=1.5.1
+VERSION=1.5.2
 cd "$(dirname "$0")"
 # One build per architecture (no full Xcode needed), then merge into a universal binary.
 # Ask SwiftPM where it put each binary: newer toolchains moved it (.build/out/Products/Release)
