@@ -24,26 +24,78 @@ enum FaceIcon {
         m.stroke()
     }
 
-    /// Just the two eyes, close together, for the menu bar.
-    static func drawEyesOnly(in r: CGRect, blink: CGFloat, look: CGFloat, color: NSColor) {
+    /// Just the two eyes, close together, for the menu bar. anger 0…1 (air-raid alert): the eyes sink lower,
+    /// their inner top corners drop into a frown, and a translucent plate stays where each eye used to be.
+    static func drawEyesOnly(in r: CGRect, blink: CGFloat, look: CGFloat, color: NSColor, anger: CGFloat = 0) {
         let k = min(r.width / 54, r.height / 34)
         let ox = r.midX - 27 * k, oy = r.midY - 17 * k
-        color.setFill()
-        let w: CGFloat = 22, h = max(34 * blink, 4)
-        for x0: CGFloat in [0, 32] {
-            let rect = CGRect(x: ox + (x0 + look * 3) * k, y: oy + (17 - h / 2) * k, width: w * k, height: h * k)
-            NSBezierPath(roundedRect: rect, xRadius: min(w, h) * 0.42 * k, yRadius: min(w, h) * 0.42 * k).fill()
+        let w: CGFloat = 22
+        for (i, x0) in [CGFloat(0), 32].enumerated() {
+            let x = ox + (x0 + look * 3) * k
+            if anger > 0 {                                   // ghost plate in the old place
+                color.withAlphaComponent(0.3 * anger).setFill()
+                NSBezierPath(roundedRect: CGRect(x: x, y: oy, width: w * k, height: 34 * k),
+                             xRadius: w * 0.42 * k, yRadius: w * 0.42 * k).fill()
+            }
+            let fullH = 34 - 10 * anger                      // lowered: the top comes down, the bottom stays
+            let h = max(fullH * blink, 4)
+            let rect = CGRect(x: x, y: oy + (fullH / 2 - h / 2) * k, width: w * k, height: h * k)
+            NSGraphicsContext.saveGraphicsState()
+            if anger > 0 {                                   // frown: cut the inner top corner
+                let inner = i == 0 ? rect.maxX : rect.minX, outer = i == 0 ? rect.minX : rect.maxX
+                let drop = min(9 * anger * k, rect.height * 0.55)
+                let clip = NSBezierPath()
+                clip.move(to: NSPoint(x: outer, y: rect.minY - 1))
+                clip.line(to: NSPoint(x: inner, y: rect.minY - 1))
+                clip.line(to: NSPoint(x: inner, y: rect.maxY - drop))
+                clip.line(to: NSPoint(x: outer, y: rect.maxY + 1))
+                clip.close(); clip.addClip()
+            }
+            color.setFill()
+            let rad = min(w, h) * 0.42 * k
+            NSBezierPath(roundedRect: rect, xRadius: rad, yRadius: rad).fill()
+            NSGraphicsContext.restoreGraphicsState()
         }
     }
 
     /// Menu-bar image (template, so macOS tints it for light/dark bars).
-    /// `tint` = nil: template image (macOS colours it for the bar); otherwise drawn in that colour (alerts).
-    static func menuBar(blink: CGFloat, look: CGFloat, tint: NSColor? = nil) -> NSImage {
+    static func menuBar(blink: CGFloat, look: CGFloat, anger: CGFloat = 0) -> NSImage {
         let img = NSImage(size: NSSize(width: 28, height: 18), flipped: false) { rect in
-            drawEyesOnly(in: rect.insetBy(dx: 2, dy: 2), blink: blink, look: look, color: tint ?? .black)
+            drawEyesOnly(in: rect.insetBy(dx: 2, dy: 2), blink: blink, look: look, color: .black, anger: anger)
             return true
         }
-        img.isTemplate = tint == nil
+        img.isTemplate = true
+        return img
+    }
+
+    static let alertColor = NSColor(srgbRed: 1, green: 0.84, blue: 0.04, alpha: 1)   // yellow
+
+    /// Shahed-style delta-wing drone seen from above, for air-raid alerts (coloured, not a template).
+    static func drawDrone(in r: CGRect, color: NSColor = alertColor) {
+        let k = min(r.width, r.height) / 18
+        let ox = r.midX - 9 * k, oy = r.midY - 9 * k
+        func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: ox + x * k, y: oy + y * k) }
+        color.setFill(); color.setStroke()
+        let wing = NSBezierPath()
+        wing.move(to: p(9, 13.2)); wing.line(to: p(17.2, 3.4)); wing.line(to: p(0.8, 3.4)); wing.close()
+        wing.lineJoinStyle = .round; wing.lineWidth = 0.8 * k
+        wing.fill(); wing.stroke()
+        NSBezierPath(roundedRect: NSRect(origin: p(7.6, 7.4), size: NSSize(width: 2.8 * k, height: 9.8 * k)),
+                     xRadius: 1.4 * k, yRadius: 1.4 * k).fill()                                   // fuselage / nose
+        for x: CGFloat in [0.5, 16.7] {                                                          // wingtip fins
+            NSBezierPath(roundedRect: NSRect(origin: p(x, 1.8), size: NSSize(width: 0.8 * k, height: 4.2 * k)),
+                         xRadius: 0.4 * k, yRadius: 0.4 * k).fill()
+        }
+        NSBezierPath(rect: NSRect(origin: p(8.55, 1.4), size: NSSize(width: 0.9 * k, height: 2.4 * k))).fill()   // tail
+        NSBezierPath(roundedRect: NSRect(origin: p(7.0, 0.7), size: NSSize(width: 4 * k, height: 0.8 * k)),
+                     xRadius: 0.4 * k, yRadius: 0.4 * k).fill()                                    // propeller
+    }
+
+    static func drone(size: CGFloat = 18) -> NSImage {
+        let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            drawDrone(in: rect.insetBy(dx: 0.5, dy: 0.5)); return true
+        }
+        img.isTemplate = false
         return img
     }
 

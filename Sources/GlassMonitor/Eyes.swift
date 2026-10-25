@@ -154,11 +154,11 @@ final class EyesModel: ObservableObject {
     }
 
     /// Technical page: play an intro once, then repeat a loop until `resume()`.
-    func hold(intro: String, loop name: String) {
+    func hold(intro: String?, loop name: String, slice: (Double, Double)? = nil) {
         task?.cancel()
         task = Task {
-            await play(intro, 1)
-            while !Task.isCancelled { await play(name, 1) }
+            if let intro { await play(intro, 1) }
+            while !Task.isCancelled { await play(name, 1, slice: slice) }
         }
     }
 

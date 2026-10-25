@@ -33,6 +33,18 @@ final class AirAlertMonitor: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     @Published private(set) var alert: ActiveAlert?
+
+    /// Alert state of every oblast, keyed by the map's region name ("Київська область", "м. Київ", …).
+    struct OblastAlert: Equatable {
+        var whole = false        // declared for the oblast itself
+        var areas = 0            // raions / hromadas under alert inside it
+        var red = false
+        var standing = false     // older than a week: the administrative alert over occupied territory
+        var since: Date?         // earliest start among its active alerts (fresh ones preferred)
+        var freshSince: Date?
+    }
+    @Published private(set) var oblasts: [String: OblastAlert] = [:]
+    @Published private(set) var updatedAt: Date?
     @Published private(set) var autoPlace: Place?
     @Published private(set) var manualChanged = 0      // bumps the UI when the region is picked by hand
 
@@ -131,6 +143,8 @@ final class AirAlertMonitor: NSObject, ObservableObject, CLLocationManagerDelega
         if states.isEmpty { await loadRegions() }
         guard let data = await get("/alerts"),
               let entries = try? JSONDecoder().decode([EntryDTO].self, from: data) else { return }   // keep last state on failure
+        oblasts = oblastStatus(entries)
+        updatedAt = Date()
         var a = match(entries)
         if a != nil {
             await refreshThreats()
@@ -194,11 +208,58 @@ final class AirAlertMonitor: NSObject, ObservableObject, CLLocationManagerDelega
         return out
     }
 
+    /// The API mixes "…T16:45:00Z" and "…T02:23:21.15503Z" (fractional seconds).
+    nonisolated private static func parseDate(_ s: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: s) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: s)
+    }
+
+    // MARK: Map
+
+    private func oblastStatus(_ entries: [EntryDTO]) -> [String: OblastAlert] {
+        var out: [String: OblastAlert] = [:]
+        var fresh = Set<String>()
+        for e in entries {
+            let air = e.activeAlerts.filter { $0.type == "AIR" }
+            guard !air.isEmpty, let r = regions[e.regionId], let state = regions[r.stateId] else { continue }
+            var name = state.name
+            // cities that are their own top-level region (м. Харків та …, м. Запоріжжя та …) sit inside an oblast
+            if name.hasPrefix("м. "), name != "м. Київ", let city = name.dropFirst(3).split(separator: " ").first {
+                let stem = Self.norm(String(city)).prefix(5)
+                if let oblast = states.first(where: { !$0.name.hasPrefix("м. ") && Self.norm($0.name).hasPrefix(stem) }) { name = oblast.name }
+            }
+            var o = out[name] ?? OblastAlert()
+            if r.type == "State" && !state.name.hasPrefix("м. ") || state.name == "м. Київ" { o.whole = true } else { o.areas += 1 }
+            let levels = air.flatMap { $0.activeAlertLevels ?? [] }
+            if levels.isEmpty || levels.contains(where: { $0.alertLevel == "Red" }) { o.red = true }
+            let since = (levels.compactMap { $0.createdAt } + air.compactMap { $0.lastUpdate }).compactMap(Self.parseDate).min()
+            let old = since.map { Date().timeIntervalSince($0) > 7 * 86400 } ?? false
+            if !old { fresh.insert(name) }
+            // shown start time: the earliest fresh alert; weeks-old frontline ones only when there is nothing else
+            if let since { if old { o.since = min(o.since ?? since, since) } else { o.freshSince = min(o.freshSince ?? since, since) } }
+            out[name] = o
+        }
+        for (name, var o) in out {
+            o.standing = !fresh.contains(name)          // only weeks-old alerts → administrative / occupied
+            if let f = o.freshSince { o.since = f }
+            out[name] = o
+        }
+        return out
+    }
+
+    /// Name of the oblast we watch, as on the map.
+    var watchedOblast: String? {
+        if let id = manualRegionId, let r = regions[id] { return regions[r.stateId]?.name }
+        return autoPlace?.stateId.flatMap { regions[$0]?.name }
+    }
+
     // MARK: Matching
 
     /// Which alert entries concern the chosen place.
     private func match(_ entries: [EntryDTO]) -> ActiveAlert? {
-        let iso = ISO8601DateFormatter()
         var relevant: (String) -> Bool = { _ in false }
 
         if let id = manualRegionId, let r = regions[id] {
@@ -219,7 +280,7 @@ final class AirAlertMonitor: NSObject, ObservableObject, CLLocationManagerDelega
             let levels = air.flatMap { $0.activeAlertLevels ?? [] }
             let red = levels.isEmpty || levels.contains { $0.alertLevel == "Red" }   // no level reported = red
             let since = (levels.compactMap { $0.createdAt } + air.compactMap { $0.lastUpdate })
-                .compactMap { iso.date(from: $0) }.min()
+                .compactMap(Self.parseDate).min()
             let reason = levels.sorted { ($0.alertLevel == "Red" ? 0 : 1) < ($1.alertLevel == "Red" ? 0 : 1) }
                 .compactMap { $0.reason }.first { !$0.isEmpty }
             let a = ActiveAlert(regionName: e.regionName, red: red, since: since, reason: reason)
@@ -299,40 +360,18 @@ private extension Array where Element: Hashable {
     func removingDuplicates() -> [Element] { var seen = Set<Element>(); return filter { seen.insert($0).inserted } }
 }
 
-/// Yellow rocket for the menu bar (coloured on purpose, so not a template image).
-enum RocketIcon {
-    static func image() -> NSImage {
-        let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            let t = NSAffineTransform()
-            t.translateX(by: 9, yBy: 9); t.rotate(byDegrees: -45); t.translateX(by: -9, yBy: -9)
-            t.concat()
-            let yellow = NSColor(srgbRed: 1, green: 0.84, blue: 0.04, alpha: 1)
+/// Oblast outlines (Natural Earth, public domain; simplified, normalised to 0…1, y down) from Assets/ukraine_map.json.
+struct UkraineMap {
+    struct Region { let name: String; let polys: [[CGPoint]] }
+    let aspect: CGFloat
+    let regions: [Region]
 
-            // flame
-            yellow.withAlphaComponent(0.5).setFill()
-            NSBezierPath(ovalIn: NSRect(x: 7.6, y: 0.8, width: 2.8, height: 3.6)).fill()
-            // fins
-            yellow.setFill()
-            for side: CGFloat in [-1, 1] {
-                let f = NSBezierPath()
-                f.move(to: NSPoint(x: 9 + 2.7 * side, y: 4.6)); f.line(to: NSPoint(x: 9 + 4.9 * side, y: 2.8))
-                f.line(to: NSPoint(x: 9 + 4.9 * side, y: 6.4)); f.line(to: NSPoint(x: 9 + 2.7 * side, y: 8.4)); f.close()
-                f.fill()
-            }
-            // body with a pointed nose
-            let b = NSBezierPath()
-            b.move(to: NSPoint(x: 6.3, y: 4.2)); b.line(to: NSPoint(x: 6.3, y: 10.4))
-            b.curve(to: NSPoint(x: 9, y: 16.6), controlPoint1: NSPoint(x: 6.3, y: 13.6), controlPoint2: NSPoint(x: 8, y: 15.6))
-            b.curve(to: NSPoint(x: 11.7, y: 10.4), controlPoint1: NSPoint(x: 10, y: 15.6), controlPoint2: NSPoint(x: 11.7, y: 13.6))
-            b.line(to: NSPoint(x: 11.7, y: 4.2)); b.close()
-            b.fill()
-            // window (cut out)
-            NSGraphicsContext.current?.compositingOperation = .clear
-            NSBezierPath(ovalIn: NSRect(x: 7.75, y: 9.2, width: 2.5, height: 2.5)).fill()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
-            return true
-        }
-        img.isTemplate = false
-        return img
-    }
+    static let shared: UkraineMap? = {
+        struct DTO: Decodable { let aspect: Double; let regions: [R]; struct R: Decodable { let name: String; let polys: [[[Double]]] } }
+        guard let url = Bundle.main.url(forResource: "ukraine_map", withExtension: "json"),
+              let data = try? Data(contentsOf: url), let d = try? JSONDecoder().decode(DTO.self, from: data) else { return nil }
+        return UkraineMap(aspect: CGFloat(d.aspect), regions: d.regions.map { r in
+            Region(name: r.name, polys: r.polys.map { $0.map { CGPoint(x: $0[0], y: $0[1]) } })
+        })
+    }()
 }

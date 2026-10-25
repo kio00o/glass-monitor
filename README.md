@@ -39,6 +39,8 @@ Data: active alerts from [siren.pp.ua](https://siren.pp.ua) (a public mirror of 
 
 ## Credits
 
+The Ukraine map outlines in `Assets/ukraine_map.json` are derived from [Natural Earth](https://www.naturalearthdata.com) (public domain), simplified.
+
 The mascot animations in `Assets/Taby` are Taby character artwork by TRIIIS LABS
 ([firmware-taby](https://github.com/TRIIIS-LABS/firmware-taby)), used under the Taby Artwork Terms in
 `Assets/Taby/LICENSE-TABY.txt`. Modified (rotated, cropped, rendered as a monochrome mask). Not an official Taby product.

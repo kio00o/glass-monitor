@@ -32,7 +32,7 @@ final class Monitor: ObservableObject {
     struct ClaudeWindow { var percent: Double; var resetsAt: Date }
     struct ClaudeLimits { var fiveHour: ClaudeWindow?; var sevenDay: ClaudeWindow? }
     @Published var claude: ClaudeLimits?
-    enum Page { case main, network, claude, memory }
+    enum Page { case main, network, claude, memory, alerts }
     @Published var page: Page = .main
     @Published var downHistory = [Double](repeating: 0, count: 40)
     @Published var upHistory = [Double](repeating: 0, count: 40)

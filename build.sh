@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Builds GlassMonitor.app (ad-hoc signed) next to this script.
 set -e
-VERSION=1.5.0
+VERSION=1.5.1
 cd "$(dirname "$0")"
 # One build per architecture (no full Xcode needed), then merge into a universal binary.
 # Ask SwiftPM where it put each binary: newer toolchains moved it (.build/out/Products/Release)
@@ -19,6 +19,7 @@ rm -rf $APP && mkdir -p $APP/Contents/MacOS
 cp .build/universal/GlassMonitor $APP/Contents/MacOS/
 mkdir -p $APP/Contents/Resources && cp -R Assets/Taby $APP/Contents/Resources/Taby
 cp Assets/AppIcon.icns $APP/Contents/Resources/
+cp Assets/ukraine_map.json $APP/Contents/Resources/
 cat > $APP/Contents/Info.plist <<PL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

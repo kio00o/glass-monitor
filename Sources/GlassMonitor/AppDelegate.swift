@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let eyes = EyesModel()
     private let menuIcon = MenuIconModel()
     private let airAlerts = AirAlertMonitor()
+    private var droneItem: NSStatusItem?
+    private var droneTask: Task<Void, Never>?
 
     private var statusItem: NSStatusItem!
     private var panel: Panel!
@@ -59,8 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.store(in: &cancellables)
 
         // Yellow menu-bar eyes while there is an air-raid alert in the user's area.
-        airAlerts.$alert.receive(on: DispatchQueue.main).sink { [weak self] in self?.menuIcon.alert = $0 != nil }
-            .store(in: &cancellables)
+        airAlerts.$alert.map { $0 != nil }.removeDuplicates().receive(on: DispatchQueue.main).sink { [weak self] on in
+            self?.menuIcon.alert = on        // angry, lowered eyes
+            self?.showDrone(on)              // orange drone slides in next to them
+        }.store(in: &cancellables)
         airAlerts.start()
         eyes.alarmed = { [airAlerts] in airAlerts.alert != nil }
         airAlerts.$alert.map { $0 != nil }.removeDuplicates().dropFirst().receive(on: DispatchQueue.main)
@@ -95,6 +99,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.hide() }
         }
+    }
+
+    // MARK: Air-raid drone
+
+    private func showDrone(_ on: Bool) {
+        droneTask?.cancel()
+        if on && droneItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: 0)   // created after the eyes → sits to their left
+            item.button?.image = FaceIcon.drone()
+            item.button?.imageScaling = .scaleNone
+            item.button?.target = self
+            item.button?.action = #selector(openAlertsPage)
+            droneItem = item
+        }
+        guard let item = droneItem else { return }
+        let from = item.length, to: CGFloat = on ? 24 : 0
+        droneTask = Task {
+            for i in 1...10 where !Task.isCancelled {
+                let t = CGFloat(i) / 10
+                item.length = from + (to - from) * (1 - pow(1 - t, 3))
+                item.button?.alphaValue = on ? t : 1 - t
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+            if !on, !Task.isCancelled { NSStatusBar.system.removeStatusItem(item); droneItem = nil }
+        }
+    }
+
+    @objc private func openAlertsPage() {
+        monitor.page = .alerts
+        if !visible { show() }
     }
 
     // MARK: Air-raid region

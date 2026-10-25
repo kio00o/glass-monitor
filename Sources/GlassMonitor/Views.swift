@@ -110,6 +110,8 @@ struct ContentView: View {
                 ClaudePage().transition(.opacity)
             } else if m.page == .memory {
                 MemoryPage().transition(.opacity)
+            } else if m.page == .alerts {
+                AlertsPage().transition(.opacity)
             } else {
                 mainPage.transition(.opacity)
             }
@@ -118,7 +120,8 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: m.page)
         .onChange(of: m.page) { old, new in
             if new == .claude { eyes.hold(intro: "claude_in", loop: "claude_loop") }
-            else if old == .claude { eyes.resume() }
+            else if new == .alerts { eyes.hold(intro: nil, loop: "hello_disappointed", slice: (0, 0.55)) }   // worried brows, sad sigh
+            else if old == .claude || old == .alerts { eyes.resume() }
         }
         .onAppear {
             eyes.mood = { [m] in
@@ -177,7 +180,7 @@ struct ContentView: View {
     private var memory: some View {
         Card(fill: true) {
             HStack(alignment: .top, spacing: 10) {
-                MemoryChipIcon()
+                MemoryCardIcon()
                 VStack(alignment: .leading, spacing: 3) {
                     Title(text: "Memory")
                     Subtitle(text: "Pressure: \(m.memoryPressure)%")
@@ -576,29 +579,30 @@ private struct ClaudeMark: View {
     }
 }
 
-/// Drive with a see-through base; the SF Symbol is a single layer, so it is drawn by hand.
+/// Drive: solid cap, small gap, solid base with a cut-out slot and status light
+/// (drawn by hand: the SF Symbol is a single flat layer).
 private struct DriveIcon: View {
     var body: some View {
-        ZStack {
-            Path { p in
-                p.move(to: CGPoint(x: 6.5, y: 0.8)); p.addLine(to: CGPoint(x: 15.5, y: 0.8))
-                p.addLine(to: CGPoint(x: 20.2, y: 9.6)); p.addLine(to: CGPoint(x: 1.8, y: 9.6)); p.closeSubpath()
-            }
-            .fill(Color.primary)
-            .overlay(Path { p in
-                p.move(to: CGPoint(x: 6.5, y: 0.8)); p.addLine(to: CGPoint(x: 15.5, y: 0.8))
-                p.addLine(to: CGPoint(x: 20.2, y: 9.6)); p.addLine(to: CGPoint(x: 1.8, y: 9.6)); p.closeSubpath()
-            }.stroke(Color.primary, style: StrokeStyle(lineWidth: 1.6, lineJoin: .round)))
-            .frame(width: 22, height: 10.4).offset(y: -3.8)
+        Canvas { ctx, size in
+            let ox = (size.width - 22) / 2, oy = (size.height - 16) / 2
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + x, y: oy + y) }
+            let solid = GraphicsContext.Shading.color(.primary)
 
-            RoundedRectangle(cornerRadius: 3.4).frame(width: 22, height: 7.4)
-                .foregroundStyle(Color.primary.opacity(0.5))
-                .offset(y: 5.4)
-            HStack(spacing: 1.9) {
-                ForEach(0..<5, id: \.self) { _ in Capsule().frame(width: 1.1, height: 2.6) }
-            }
-            .foregroundStyle(Color.primary)
-            .offset(x: 1.5, y: 5.4)
+            var cap = Path()                          // flared lid with rounded top corners
+            cap.move(to: p(0.8, 7.4))
+            cap.addLine(to: p(3.7, 2.4))
+            cap.addQuadCurve(to: p(5.9, 1.1), control: p(4.4, 1.1))
+            cap.addLine(to: p(16.1, 1.1))
+            cap.addQuadCurve(to: p(18.3, 2.4), control: p(17.6, 1.1))
+            cap.addLine(to: p(21.2, 7.4))
+            cap.closeSubpath()
+            ctx.fill(cap, with: solid)
+
+            ctx.fill(Path(roundedRect: CGRect(origin: p(0.8, 8.7), size: CGSize(width: 20.4, height: 6.6)), cornerRadius: 2.6), with: solid)
+
+            ctx.blendMode = .destinationOut           // slot + light are holes, so the glass shows through
+            ctx.fill(Path(roundedRect: CGRect(origin: p(3.4, 11.3), size: CGSize(width: 11.6, height: 1.4)), cornerRadius: 0.7), with: solid)
+            ctx.fill(Path(ellipseIn: CGRect(origin: p(16.6, 11.05), size: CGSize(width: 1.9, height: 1.9))), with: solid)
         }
         .frame(width: 30, height: 30)
     }
@@ -665,19 +669,32 @@ private struct MemoryPage: View {
     }
 }
 
-/// Memory chip with see-through pins (the SF Symbol is a single layer, so its pins can't be dimmed).
-private struct MemoryChipIcon: View {
+/// Memory card: contacts in a scalloped notch on top (see-through), a side notch,
+/// and a cut-out window at the bottom. Tall and narrow.
+private struct MemoryCardIcon: View {
     var body: some View {
-        ZStack {
-            ForEach(0..<5, id: \.self) { i in
-                let x = (CGFloat(i) - 2) * 4.6
-                Capsule().frame(width: 1.8, height: 3.4).offset(x: x, y: -7.2)
-                Capsule().frame(width: 1.8, height: 3.4).offset(x: x, y: 7.2)
+        Canvas { ctx, size in
+            let w: CGFloat = 15, h: CGFloat = 22
+            let ox = (size.width - w) / 2, oy = (size.height - h) / 2
+            func r(_ x: CGFloat, _ y: CGFloat, _ rw: CGFloat, _ rh: CGFloat) -> CGRect { CGRect(x: ox + x, y: oy + y, width: rw, height: rh) }
+            let solid = GraphicsContext.Shading.color(.primary)
+            let pinsX: [CGFloat] = [4.8, 7.5, 10.2]
+
+            ctx.drawLayer { l in                      // body + holes in their own layer
+                l.fill(Path(roundedRect: r(0, 0, w, h), cornerRadius: 3.6), with: solid)
+                l.blendMode = .destinationOut
+                for x in pinsX {                       // overlapping capsules → scalloped notch around the pins
+                    l.fill(Path(roundedRect: r(x - 1.75, -2, 3.5, 6.6), cornerRadius: 1.75), with: solid)
+                }
+                l.fill(Path(roundedRect: r(w - 1.7, 8.4, 4, 4.4), cornerRadius: 1.3), with: solid)        // side notch
+                l.fill(Path(roundedRect: r(2.5, h - 7.4, w - 5, 9), cornerRadius: 2.8), with: solid)       // window ring…
+                l.blendMode = .normal
+                l.fill(Path(roundedRect: r(3.5, h - 6.3, w - 7, 5.6), cornerRadius: 1.8), with: solid)     // …around a solid block
             }
-            .opacity(0.5)
-            RoundedRectangle(cornerRadius: 3.2).frame(width: 22, height: 12.5)
+            for x in pinsX {                           // see-through contacts
+                ctx.fill(Path(roundedRect: r(x - 0.8, 0.2, 1.6, 3.6), cornerRadius: 0.8), with: .color(.primary.opacity(0.5)))
+            }
         }
-        .foregroundStyle(Color.primary)
         .frame(width: 30, height: 30)
     }
 }
@@ -687,6 +704,7 @@ private struct MemoryChipIcon: View {
 
 private struct AirAlertCard: View {
     @EnvironmentObject var air: AirAlertMonitor
+    @EnvironmentObject var m: Monitor
 
     private static let yellow = Color(red: 1, green: 0.84, blue: 0.04)
     private static let red = Color(red: 1, green: 0.27, blue: 0.23)
@@ -697,7 +715,7 @@ private struct AirAlertCard: View {
         HStack(alignment: .top, spacing: 10) {
             Group {
                 if a != nil {
-                    Image(nsImage: RocketIcon.image()).resizable().frame(width: 20, height: 20)
+                    Image(nsImage: FaceIcon.drone(size: 22)).resizable().frame(width: 22, height: 22)
                 } else {
                     Image(systemName: "checkmark.shield").font(.system(size: 18)).foregroundStyle(Color.primary.opacity(0.62))
                 }
@@ -709,7 +727,7 @@ private struct AirAlertCard: View {
                     Title(text: a == nil ? "Тривоги немає" : "Повітряна тривога")
                     Spacer(minLength: 6)
                     if let since = a?.since {
-                        Text("з \(since.formatted(date: .omitted, time: .shortened))")
+                        Text("з \(ukTime(since))")
                             .font(.system(size: 11.5, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(accent ?? Color.primary)
                     }
@@ -739,7 +757,162 @@ private struct AirAlertCard: View {
             if let accent { RoundedRectangle(cornerRadius: 16).strokeBorder(accent.opacity(0.55), lineWidth: 1) }
         }
         .contentShape(.rect(cornerRadius: 16))
-        .onTapGesture { NSWorkspace.shared.open(URL(string: "https://alerts.in.ua")!) }
+        .onTapGesture { m.page = .alerts }
         .animation(.easeInOut(duration: 0.25), value: a)
+    }
+}
+
+
+// MARK: - Alerts map page
+
+private let alertColor = Color(nsColor: FaceIcon.alertColor)
+
+/// 24-hour Ukrainian time ("21:56", or "25 жовт., 21:56" for older alerts) regardless of the system's 12-hour setting.
+private func ukTime(_ d: Date, withDate: Bool = false) -> String {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "uk_UA")
+    f.dateFormat = withDate ? "d MMM, HH:mm" : "HH:mm"
+    return f.string(from: d)
+}
+
+private struct AlertsPage: View {
+    @EnvironmentObject var m: Monitor
+    @EnvironmentObject var air: AirAlertMonitor
+
+    var body: some View {
+        let active = air.oblasts.filter { !$0.value.standing }.count
+        GlassGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Button { m.page = .main } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.primary).frame(width: 28, height: 28)
+                            .glass(.circle)
+                            .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    Text("Мапа тривог").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.primary)
+                    Spacer()
+                    Text(active == 0 ? "Тривог немає" : "Тривога в \(active) обл.")
+                        .font(.system(size: 11.5)).foregroundStyle(active == 0 ? Color.primary.opacity(0.62) : alertColor)
+                }
+                EyesPanel().frame(height: 84)
+                VStack(alignment: .leading, spacing: 10) {
+                    if let map = UkraineMap.shared {
+                        // fixed size: a flexible map lets the window shrink when the hover label appears
+                        AlertMap(map: map, oblasts: air.oblasts, mine: air.watchedOblast)
+                            .frame(width: 408, height: (408 / map.aspect).rounded())
+                    } else {
+                        Subtitle(text: "Мапа недоступна")
+                    }
+                    HStack(spacing: 12) {
+                        legend(alertColor.opacity(0.95), "уся область")
+                        legend(alertColor.opacity(0.62), "частина")
+                        legend(alertColor.opacity(0.22), "тривала")
+                        HStack(spacing: 5) {
+                            RoundedRectangle(cornerRadius: 2).strokeBorder(Color.primary, lineWidth: 1.4).frame(width: 10, height: 10)
+                            Text("твій регіон")
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .font(.system(size: 10.5)).foregroundStyle(Color.primary.opacity(0.62))
+                    if let t = air.updatedAt {
+                        Text("Оновлено о \(ukTime(t)) · siren.pp.ua · не замінює офіційні сповіщення")
+                            .font(.system(size: 10)).foregroundStyle(Color.primary.opacity(0.45))
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glass(.rect(cornerRadius: 16))
+            }
+            .padding(12)
+        }
+    }
+
+    private func legend(_ c: Color, _ text: String) -> some View {
+        HStack(spacing: 5) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 10); Text(text) }
+    }
+}
+
+/// Ukraine with oblasts tinted by alert state; the watched oblast is outlined; hover shows details.
+private struct AlertMap: View {
+    let map: UkraineMap
+    let oblasts: [String: AirAlertMonitor.OblastAlert]
+    let mine: String?
+    // @State is a macro in the new SDK and the Command Line Tools ship no plugin for it → keep hover in a tiny object
+    private final class Hover: ObservableObject { @Published var value: (name: String, at: CGPoint)? }
+    @StateObject private var hoverBox = Hover()
+    private var hover: (name: String, at: CGPoint)? { hoverBox.value }
+
+    private static func path(_ r: UkraineMap.Region, _ size: CGSize) -> Path {
+        var p = Path()
+        for poly in r.polys {
+            guard let f = poly.first else { continue }
+            p.move(to: CGPoint(x: f.x * size.width, y: f.y * size.height))
+            for q in poly.dropFirst() { p.addLine(to: CGPoint(x: q.x * size.width, y: q.y * size.height)) }
+            p.closeSubpath()
+        }
+        return p
+    }
+
+    private func label(_ name: String) -> String {
+        guard let o = oblasts[name] else { return "\(name)\nТривоги немає" }
+        var lines = [name]
+        if o.standing { lines.append("Тривала тривога") }
+        else { lines.append(o.whole ? "Тривога на всю область" : "Тривога в \(o.areas) \(o.areas == 1 ? "громаді/районі" : "громадах/районах")") }
+        if let since = o.since {
+            lines.append("з " + ukTime(since, withDate: !Calendar.current.isDateInToday(since)))
+        }
+        if o.red { lines.append("Червоний рівень") }
+        return lines.joined(separator: "\n")
+    }
+
+    var body: some View {
+        GeometryReader { g in
+            canvas
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let pt):
+                        // last match wins: м. Київ is drawn over Київська область
+                        hoverBox.value = map.regions.last { Self.path($0, g.size).contains(pt) }.map { ($0.name, pt) }
+                    case .ended: hoverBox.value = nil
+                    }
+                }
+        }
+    }
+
+    private var canvas: some View {
+        Canvas { ctx, size in
+            func path(_ r: UkraineMap.Region) -> Path { Self.path(r, size) }
+            for r in map.regions {
+                let p = path(r)
+                let fill: Color
+                if let o = oblasts[r.name] {
+                    fill = o.standing ? alertColor.opacity(0.22) : alertColor.opacity(o.whole ? 0.95 : 0.62)
+                } else {
+                    fill = Color.primary.opacity(0.08)
+                }
+                ctx.fill(p, with: .color(fill))
+                ctx.stroke(p, with: .color(Color.primary.opacity(0.28)), style: StrokeStyle(lineWidth: 0.6, lineJoin: .round))
+            }
+            if let mine, let r = map.regions.first(where: { $0.name == mine }) {
+                ctx.stroke(path(r), with: .color(.primary), style: StrokeStyle(lineWidth: 1.6, lineJoin: .round))
+            }
+            if let h = hover, let r = map.regions.last(where: { $0.name == h.name }) {
+                ctx.stroke(path(r), with: .color(alertColor), style: StrokeStyle(lineWidth: 1.4, lineJoin: .round))
+
+                // Hover label drawn inside the canvas with a solid background: a separate overlay view with a
+                // material made the Liquid Glass card around the map re-render (streaks at the edges).
+                let text = ctx.resolve(Text(label(h.name)).font(.system(size: 11)).foregroundStyle(Color.primary))
+                let ts = text.measure(in: CGSize(width: 220, height: 200))
+                let box = CGSize(width: ts.width + 16, height: ts.height + 12)
+                let x = min(max(h.at.x + 12, 0), size.width - box.width)
+                let y = h.at.y - box.height - 10 < 0 ? h.at.y + 16 : h.at.y - box.height - 10
+                let rect = CGRect(x: x, y: min(y, size.height - box.height), width: box.width, height: box.height)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 8), with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.96)))
+                ctx.stroke(Path(roundedRect: rect, cornerRadius: 8), with: .color(Color.primary.opacity(0.15)), lineWidth: 0.5)
+                ctx.draw(text, in: rect.insetBy(dx: 8, dy: 6))
+            }
+        }
     }
 }
