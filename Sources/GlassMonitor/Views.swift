@@ -125,7 +125,7 @@ struct ContentView: View {
         }
         .onAppear {
             eyes.mood = { [m] in
-                if m.cpuLoad > 0.85 || (m.cpuTemp ?? 0) > 90 { return ("angry_01_loop", 2) }
+                if m.cpuHot { return ("angry_01_loop", 2) }
                 if m.battery.present && m.battery.percent <= 15 && !m.battery.charging { return ("sleeping_loop", 3) }
                 return nil
             }

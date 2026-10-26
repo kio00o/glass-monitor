@@ -122,6 +122,8 @@ final class EyesModel: ObservableObject {
         lastActive = Date()
         guard wasAsleep else { return }
         task?.cancel()
+        // a hot CPU or a flat battery shows the moment the panel opens, not after the 3.5 s wake-up
+        if mood() != nil { task = Task { await loop() }; return }
         task = Task {
             try? await Task.sleep(for: .seconds(0.9))      // the panel slides in while it still sleeps
             await play("wow", 1)
@@ -191,6 +193,8 @@ final class EyesModel: ObservableObject {
             // then puts the gloves on and fights back (the punching middle of `boxing`)
             if alarm { trembling = false; await play("boxing", 1, interruptible: true, slice: (0.2, 0.85)); continue }
             trembling = false
+            // a stressed CPU or a flat battery outranks music, otherwise headphones hide it for the whole song
+            if let m = mood() { await play(m.0, m.1, interruptible: true); continue }
 
             let now = listening()
             if now != wasListening {                 // music just started or stopped
@@ -201,7 +205,6 @@ final class EyesModel: ObservableObject {
             if now { await play("listening_music_loop", 1, interruptible: true); continue }
             if inactive > Self.sleepAfter { isAsleep = true; await play("sleeping_loop", 2); continue }
             await play("idle_01_loop", 1, interruptible: true)
-            if let m = mood() { await play(m.0, m.1); continue }
             if inactive > Self.boredAfter, Double.random(in: 0..<1) < 0.85, let a = Self.activities.randomElement() {
                 await play(a.0, a.1); continue
             }

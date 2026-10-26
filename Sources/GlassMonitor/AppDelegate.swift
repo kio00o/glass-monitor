@@ -39,6 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         Notifier.shared.setup()
+        #if DEBUG
+        setvbuf(stdout, nil, _IOLBF, 0)        // ./dev.sh with GM_LOG: lines reach the file as they are printed
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("dev.local.glassmonitor.debug"),
+                                                            object: nil, queue: .main) { [weak self] n in
+            let cmd = n.object as? String ?? ""
+            MainActor.assumeIsolated { self?.debugCommand(cmd) }
+        }
+        #endif
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("dev.local.glassmonitor.test"),
                                                             object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { Notifier.shared.sendTest() }
@@ -66,10 +74,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Yellow menu-bar eyes while there is an air-raid alert in the user's area.
         airAlerts.$alert.receive(on: DispatchQueue.main).sink { [weak self] alert in
-            self?.menuIcon.alert = alert != nil      // angry, lowered eyes
             self?.alertRed = alert?.red ?? false
             self?.showDrone(alert != nil)            // drone slides in next to them; dot shows severity
         }.store(in: &cancellables)
+        // Angry, lowered eyes during an air-raid alert or while the CPU is hot.
+        airAlerts.$alert.map { $0 != nil }.combineLatest(monitor.$cpuHot).receive(on: DispatchQueue.main)
+            .sink { [weak self] alarm, hot in self?.menuIcon.alert = alarm || hot }.store(in: &cancellables)
+        monitor.$cpuHot.removeDuplicates().dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.eyes.nudge() }.store(in: &cancellables)
+        // "92°" next to the eyes while hot or when enabled; cpuTemp changes on every refresh, so this follows it live.
+        monitor.$cpuTemp.combineLatest(monitor.$cpuHot).receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateStatusTitle() }.store(in: &cancellables)
         // redraw the drone (black/white) when the menu-bar appearance flips
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
                                                             object: nil, queue: .main) { [weak self] _ in
@@ -189,22 +204,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         airAlerts.manualRegionId = sender.representedObject as? String
     }
 
-    // MARK: Status-bar limit text
+    // MARK: Status-bar text
 
-    private static let showLimitKey = "showLimitInBar"
+    private static let showLimitKey = "showLimitInBar", showTempKey = "showTempInBar"
     private var showLimit: Bool { UserDefaults.standard.object(forKey: Self.showLimitKey) as? Bool ?? true }
+    private var showTemp: Bool { UserDefaults.standard.bool(forKey: Self.showTempKey) }
 
     private func updateStatusTitle() {
         guard let b = statusItem?.button else { return }
-        guard showLimit, let limits = monitor.claude else {
-            b.attributedTitle = NSAttributedString(string: "")
-            return
+        var parts: [String] = []
+        // the hot warning shows its reading even with the setting off
+        if monitor.cpuHot || (showTemp && monitor.cpuTemp != nil) {
+            parts.append(monitor.cpuTemp.map { "\(Int($0.rounded()))°" } ?? "CPU \(Int((monitor.cpuLoad * 100).rounded()))%")
         }
-        var text = " Session 0%"                                   // no active session = nothing used yet
-        if let w = limits.fiveHour, w.resetsAt > Date() {
-            let mins = max(0, Int(w.resetsAt.timeIntervalSinceNow / 60))
-            text = " Session \(Int(w.percent.rounded()))% · \(mins >= 60 ? "\(mins / 60)h" : "\(mins)m")"
+        if showLimit, let limits = monitor.claude {
+            var text = "Session 0%"                                // no active session = nothing used yet
+            if let w = limits.fiveHour, w.resetsAt > Date() {
+                let mins = max(0, Int(w.resetsAt.timeIntervalSinceNow / 60))
+                text = "Session \(Int(w.percent.rounded()))% · \(mins >= 60 ? "\(mins / 60)h" : "\(mins)m")"
+            }
+            parts.append(text)
         }
+        let text = parts.isEmpty ? "" : " " + parts.joined(separator: " · ")
+        guard b.attributedTitle.string != text else { return }
         b.imagePosition = .imageLeft
         b.attributedTitle = NSAttributedString(
             string: text, attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)])
@@ -212,6 +234,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleShowLimit() {
         UserDefaults.standard.set(!showLimit, forKey: Self.showLimitKey)
+        updateStatusTitle()
+    }
+
+    @objc private func toggleShowTemp() {
+        UserDefaults.standard.set(!showTemp, forKey: Self.showTempKey)
         updateStatusTitle()
     }
 
@@ -240,6 +267,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         limit.target = self
         limit.state = showLimit ? .on : .off
         menu.addItem(limit)
+        let temp = NSMenuItem(title: "Show CPU Temperature in Menu Bar", action: #selector(toggleShowTemp), keyEquivalent: "")
+        temp.target = self
+        temp.state = showTemp ? .on : .off
+        menu.addItem(temp)
         menu.addItem(alertRegionMenu())
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Glass Monitor", action: #selector(quit), keyEquivalent: "q")
@@ -283,7 +314,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sub.addItem(.separator())
 
         sub.addItem(item("Low Battery (10%)", #selector(debugBattery), on: monitor.simulateLowBattery))
-        sub.addItem(item("Hot CPU (95%, 95 °C)", #selector(debugCPU), on: monitor.simulateHotCPU))
+        sub.addItem(item("Hot CPU (95%, 97 °C)", #selector(debugCPU), on: monitor.simulateHotCPU))
         sub.addItem(.separator())
         sub.addItem(item("Send Test Notification", #selector(debugNotify), on: false))
 
@@ -312,6 +343,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func debugBattery() { monitor.simulateLowBattery.toggle() }
     @objc private func debugCPU() { monitor.simulateHotCPU.toggle() }
     @objc private func debugNotify() { Notifier.shared.sendTest() }
+
+    /// The Debug menu without clicking, for scripted checks: `./dev.sh cmd show`, `./dev.sh cmd hot-cpu`, …
+    private func debugCommand(_ cmd: String) {
+        switch cmd {
+        case "show": if !visible { show() }
+        case "hide": hide()
+        case "hot-cpu": monitor.simulateHotCPU.toggle()
+        case "low-battery": monitor.simulateLowBattery.toggle()
+        case "alert-yellow", "alert-red", "alert-off":
+            let item = NSMenuItem(); item.representedObject = cmd == "alert-off" ? nil : String(cmd.dropFirst(6))
+            debugAlert(item)
+        default:
+            if cmd.hasPrefix("claude-") { monitor.simulatedSessionPercent = Double(cmd.dropFirst(7)) }
+        }
+    }
     #endif
 
     // MARK: Panel

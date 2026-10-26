@@ -11,6 +11,9 @@ final class Monitor: ObservableObject {
     @Published var battery = Sensors.Battery(percent: 0, charging: false, minutes: nil, present: true)
     @Published var cpuLoad = 0.0
     @Published var cpuTemp: Double?
+    /// CPU under stress; drives the angry menu-bar eyes, the temperature next to them and the mascot.
+    @Published private(set) var cpuHot = false
+    private var hotStreak = 0
     @Published var ssid: String?
     @Published var down = 0.0
     @Published var up = 0.0
@@ -96,9 +99,10 @@ final class Monitor: ObservableObject {
         security = Sensors.security(); linkRate = Sensors.linkRate()
         devices = Sensors.bluetoothDevices()
         updateAudio()
+        (cpuHot, hotStreak) = Self.nextHot(cpuHot, streak: hotStreak, load: cpuLoad, temp: cpuTemp)
         #if DEBUG
         if simulateLowBattery { battery = Sensors.Battery(percent: 10, charging: false, minutes: 25, present: true) }
-        if simulateHotCPU { cpuLoad = 0.95; cpuTemp = 95 }
+        if simulateHotCPU { cpuLoad = 0.95; cpuTemp = 97; cpuHot = true; hotStreak = 0 }
         #endif
         refreshClaude()
         refreshMemoryApps()
@@ -123,6 +127,16 @@ final class Monitor: ObservableObject {
         }
     }
     #endif
+
+    /// Hot after 3 samples in a row over 85 % load or 95 °C (~4.5 s), cool after 3 under 70 % and 88 °C:
+    /// without the streak and the gap, a build or a short spike makes the menu bar flicker.
+    /// An Intel i9 idles in the high 80s, so a 90 °C trigger keeps the eyes angry all day.
+    nonisolated static func nextHot(_ hot: Bool, streak: Int, load: Double, temp: Double?) -> (hot: Bool, streak: Int) {
+        let t = temp ?? 0
+        let pushing = hot ? (load < 0.7 && t < 88) : (load > 0.85 || t > 95)
+        guard pushing else { return (hot, 0) }
+        return streak + 1 >= 3 ? (!hot, 0) : (hot, streak + 1)
+    }
 
     /// Uses Apple's built-in `networkQuality` tool.
     func runSpeedTest() {

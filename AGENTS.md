@@ -15,7 +15,8 @@ as an ad-hoc-signed DMG on GitHub Releases.
   - `App.swift` — entry point; the UI lives in `AppDelegate`'s panel.
   - `AppDelegate.swift` — status item, right-click menu, slide-in panel, drone icon.
   - `Monitor.swift` — main `ObservableObject`, refreshes every 1.5 s.
-  - `Sensors.swift` — IOKit / CoreWLAN / IOBluetooth reads, private IOHID for CPU temperature.
+  - `Sensors.swift` — IOKit / CoreWLAN / IOBluetooth reads, private IOHID for CPU temperature on Apple
+   Silicon, read-only AppleSMC on Intel.
   - `ClaudeUsage.swift` — OAuth token from the Keychain → undocumented Anthropic usage endpoint.
   - `AirAlerts.swift` — siren.pp.ua alerts, alerts.in.ua threat report, local region matching, map.
   - `Eyes.swift` (mascot), `Notifier.swift` (limit notifications), `Views.swift` (all pages).
@@ -30,6 +31,8 @@ as an ad-hoc-signed DMG on GitHub Releases.
 | `swift build` | compile check (debug) |
 | `swift test` | unit tests |
 | `./dev.sh` / `./dev.sh lldb` | debug `.app` (`dev.local.glassmonitor.dev`) that runs beside the installed release; logs in the terminal |
+| `./dev.sh cmd <show\|hide\|hot-cpu\|low-battery\|alert-yellow\|alert-red\|alert-off\|claude-NN>` | drive the running dev build's Debug menu without clicking |
+| `GM_LOG=/tmp/gm.log ./dev.sh` | app output to a file (an agent shell has no terminal, so output is lost otherwise) |
 | `./build.sh` | release universal app, installs to `~/Applications` |
 | `./make_dmg.sh` | release build + `dist/GlassMonitor.dmg` |
 
@@ -39,6 +42,11 @@ as an ad-hoc-signed DMG on GitHub Releases.
   Location / Bluetooth / Keychain prompts to the terminal instead of the app.
 - In a debug build, right-click the menu-bar icon → **Debug** to simulate an air-raid alert,
   a Claude session percentage, low battery or a hot CPU.
+- To check behaviour without clicking: `GM_LOG=… ./dev.sh`, then `./dev.sh cmd …`, and a temporary
+  `print` read from the log. Remove the prints afterwards. `screencapture` needs Screen Recording
+  permission for the agent's app; without it, ask the user to look.
+- A scripted `show` panel can close by itself (it never becomes key), and the mascot then sleeps.
+  When a log looks odd, check for that before suspecting the code.
 
 ## Code conventions
 

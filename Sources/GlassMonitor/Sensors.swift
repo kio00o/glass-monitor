@@ -107,11 +107,21 @@ enum Sensors {
     }
 
     // MARK: CPU temperature (°C)
+    /// false once the IOHID sensors came back empty (Intel Macs): from then on only the SMC is asked.
+    private static var hidHasSensors = true
+
     static func cpuTemperature() -> Double? {
+        if hidHasSensors, let t = hidTemperature() { return t }
+        return hidHasSensors ? nil : SMC.cpuTemperature()
+    }
+
+    /// Apple Silicon: private IOHID temperature services.
+    private static func hidTemperature() -> Double? {
         guard let client = IOHIDEventSystemClientCreate(kCFAllocatorDefault)?.takeRetainedValue() else { return nil }
         let match: [String: Any] = ["PrimaryUsagePage": 0xff00, "PrimaryUsage": 5]
         _ = IOHIDEventSystemClientSetMatching(client, match as CFDictionary)
-        guard let services = IOHIDEventSystemClientCopyServices(client)?.takeRetainedValue() as? [CFTypeRef] else { return nil }
+        guard let services = IOHIDEventSystemClientCopyServices(client)?.takeRetainedValue() as? [CFTypeRef],
+              !services.isEmpty else { hidHasSensors = false; return nil }
         var temps: [Double] = []
         for s in services {
             let name = IOHIDServiceClientCopyProperty(s, "Product" as CFString)?.takeRetainedValue() as? String ?? ""
@@ -233,5 +243,75 @@ enum Sensors {
             else { symbol = "wave.3.right" }
             return Device(id: d.addressString ?? name, name: name, symbol: symbol)
         }
+    }
+}
+
+// MARK: - AppleSMC (Intel CPU temperature)
+
+/// Read-only: only the "key info" (9) and "read bytes" (5) commands are ever sent.
+private enum SMC {
+    /// Kernel ABI: the field order, the padding after keyInfo and the 80-byte size must match AppleSMC,
+    /// or every call fails.
+    private struct KeyData {
+        struct Vers { var major: UInt8 = 0, minor: UInt8 = 0, build: UInt8 = 0, reserved: UInt8 = 0; var release: UInt16 = 0 }
+        struct PLimit { var version: UInt16 = 0, length: UInt16 = 0; var cpu: UInt32 = 0, gpu: UInt32 = 0, mem: UInt32 = 0 }
+        struct KeyInfo { var dataSize: UInt32 = 0, dataType: UInt32 = 0; var attributes: UInt8 = 0 }
+        var key: UInt32 = 0
+        var vers = Vers()
+        var pLimit = PLimit()
+        var keyInfo = KeyInfo()
+        var padding: UInt16 = 0
+        var result: UInt8 = 0, status: UInt8 = 0, data8: UInt8 = 0
+        var data32: UInt32 = 0
+        var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                    UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)
+            = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    }
+
+    /// CPU package (PECI), then die / proximity sensors, as different Intel models expose them.
+    private static let keys = ["TCXC", "TC0F", "TC0E", "TC0P", "TC0D"]
+    private static var conn: io_connect_t = 0
+    private static var key: String?
+    private static var unavailable = false
+
+    static func cpuTemperature() -> Double? {
+        guard !unavailable, open() else { return nil }
+        if let k = key { return read(k) }
+        for k in keys { if let t = read(k) { key = k; return t } }
+        return nil
+    }
+
+    private static func open() -> Bool {
+        if conn != 0 { return true }
+        let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
+        guard svc != 0 else { unavailable = true; return false }
+        defer { IOObjectRelease(svc) }
+        guard IOServiceOpen(svc, mach_task_self_, 0, &conn) == KERN_SUCCESS else { conn = 0; unavailable = true; return false }
+        return true
+    }
+
+    /// °C from an `sp78` key (signed 8.8 fixed point); nil for a missing key, another type or a value no sensor reports.
+    private static func read(_ name: String) -> Double? {
+        var input = KeyData()
+        input.key = fourCC(name)
+        input.data8 = 9
+        guard let info = call(&input), info.result == 0, info.keyInfo.dataSize == 2,
+              info.keyInfo.dataType == fourCC("sp78") else { return nil }
+        input.keyInfo.dataSize = 2
+        input.data8 = 5
+        guard let out = call(&input), out.result == 0 else { return nil }
+        let t = Double(Int16(bitPattern: UInt16(out.bytes.0) << 8 | UInt16(out.bytes.1))) / 256
+        return t > 0 && t < 150 ? t : nil
+    }
+
+    private static func call(_ input: inout KeyData) -> KeyData? {
+        var out = KeyData()
+        var size = MemoryLayout<KeyData>.stride
+        let r = IOConnectCallStructMethod(conn, 2, &input, MemoryLayout<KeyData>.stride, &out, &size)
+        return r == KERN_SUCCESS ? out : nil
+    }
+
+    private static func fourCC(_ s: String) -> UInt32 {
+        s.utf8.prefix(4).reduce(0) { $0 << 8 | UInt32($1) }
     }
 }

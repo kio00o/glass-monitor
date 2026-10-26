@@ -3,10 +3,17 @@
 # with stdout/stderr in this terminal. Ctrl+C quits it.
 #   ./dev.sh        build + run
 #   ./dev.sh lldb   build + run under lldb (attaches as soon as it starts)
+#   ./dev.sh cmd <show|hide|hot-cpu|low-battery|alert-yellow|alert-red|alert-off|claude-NN>
+#                   drive the running dev build's Debug menu without clicking
+#   GM_LOG=<file>   send the app's output to a file instead of this terminal
 # Own bundle id, so it has its own settings and permissions and runs next to the installed release.
 # Launched through `open`, so macOS attributes Location/Bluetooth/Keychain prompts to the app, not the terminal.
 set -e
 cd "$(dirname "$0")"
+if [ "$1" = cmd ]; then
+  osascript -l JavaScript -e "ObjC.import('Foundation'); \$.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('dev.local.glassmonitor.debug', '$2', \$(), true)" >/dev/null
+  exit 0
+fi
 swift build
 BIN="$(swift build --show-bin-path)/GlassMonitor"
 APP=.build/GlassMonitor-Dev.app
@@ -37,6 +44,7 @@ codesign --force --sign - $APP
 pkill -f $DEV_PROC && sleep 0.5 || true
 trap "pkill -f $DEV_PROC || true" INT TERM EXIT
 OUT=/dev/null; tty -s && OUT=$(tty)
+[ -n "$GM_LOG" ] && OUT=$GM_LOG && : > "$OUT"
 if [ "$1" = lldb ]; then
   (sleep 1; open -n --stdout $OUT --stderr $OUT $APP) &
   lldb --wait-for --attach-name GlassMonitor -o continue
