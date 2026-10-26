@@ -19,7 +19,11 @@ as an ad-hoc-signed DMG on GitHub Releases.
    Silicon, read-only AppleSMC on Intel.
   - `ClaudeUsage.swift` — OAuth token from the Keychain → undocumented Anthropic usage endpoint.
   - `AirAlerts.swift` — siren.pp.ua alerts, alerts.in.ua threat report, local region matching, map.
-  - `Eyes.swift` (mascot), `Notifier.swift` (limit notifications), `Views.swift` (all pages).
+  - `Eyes.swift` (mascot), `Notifier.swift` (limit notifications).
+  - `Views/` — `ContentView.swift` (main panel and page switching), one file per page
+    (`NetworkPage`, `ClaudePage`, `MemoryPage`, `AlertsPage` with the main-panel alert card),
+    `Components.swift` (`Card`, `Title`, `Subtitle`, `ActionLink`, `formatSpeed`) and
+    `Icons.swift` (hand-drawn icons). Helpers used by one file stay `private` there.
 - `Assets/` — copied into the app's `Contents/Resources` by the build scripts. Code reads them
   through `Bundle.main`, so they only resolve inside a `.app`.
 - `Tests/GlassMonitorTests/` — Swift Testing, `@testable import GlassMonitor`.
