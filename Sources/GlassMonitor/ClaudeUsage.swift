@@ -67,7 +67,8 @@ enum ClaudeUsage {
         return Monitor.ClaudeWindow(percent: u * 100, resetsAt: Date(timeIntervalSince1970: t))
     }
 
-    private static func window(_ any: Any?) -> Monitor.ClaudeWindow? {
+    /// One window of the usage endpoint's JSON: `{"utilization": 14.0, "resets_at": "…"}`.
+    static func window(_ any: Any?) -> Monitor.ClaudeWindow? {
         guard let w = any as? [String: Any], let pct = w["utilization"] as? Double,
               let str = w["resets_at"] as? String, let date = parse(str), date > Date() else { return nil }
         return Monitor.ClaudeWindow(percent: pct, resetsAt: date)

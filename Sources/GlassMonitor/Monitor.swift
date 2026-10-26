@@ -96,9 +96,33 @@ final class Monitor: ObservableObject {
         security = Sensors.security(); linkRate = Sensors.linkRate()
         devices = Sensors.bluetoothDevices()
         updateAudio()
+        #if DEBUG
+        if simulateLowBattery { battery = Sensors.Battery(percent: 10, charging: false, minutes: 25, present: true) }
+        if simulateHotCPU { cpuLoad = 0.95; cpuTemp = 95 }
+        #endif
         refreshClaude()
         refreshMemoryApps()
     }
+
+    #if DEBUG
+    // Fake readings from the Debug menu; they replace the real ones until switched off.
+    var simulateLowBattery = false { didSet { refresh() } }
+    var simulateHotCPU = false { didSet { refresh() } }
+    /// One fixed window per run, so stepping 30 → 45 → 85 % fires notifications like a real session does.
+    private let simulatedReset = Date().addingTimeInterval(2 * 3600 + 15 * 60)
+    var simulatedSessionPercent: Double? {
+        didSet {
+            if let p = simulatedSessionPercent {
+                let c = ClaudeLimits(fiveHour: ClaudeWindow(percent: p, resetsAt: simulatedReset), sevenDay: claude?.sevenDay)
+                claude = c
+                Notifier.shared.check(c)
+            } else {
+                claude = nil
+                loadClaudeCache()
+            }
+        }
+    }
+    #endif
 
     /// Uses Apple's built-in `networkQuality` tool.
     func runSpeedTest() {
@@ -154,12 +178,18 @@ final class Monitor: ObservableObject {
     }
 
     private func refreshClaude() {
+        #if DEBUG
+        guard simulatedSessionPercent == nil else { return }
+        #endif
         guard !fetchingClaude, Date() >= nextClaudeFetch else { return }
         fetchingClaude = true
         Task.detached {
             let result = ClaudeUsage.fetch()
             await MainActor.run {
                 self.fetchingClaude = false
+                #if DEBUG
+                if self.simulatedSessionPercent != nil { return }
+                #endif
                 if let result {
                     self.claude = result
                     self.saveClaudeCache(result)

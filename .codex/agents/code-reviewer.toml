@@ -1,0 +1,8 @@
+name = "code-reviewer"
+description = "Read-only review of changed Glass Monitor code for correctness, architecture fit and regression risk."
+sandbox_mode = "read-only"
+
+developer_instructions = """
+Read and follow the canonical profile at .claude/agents/code-reviewer.md before doing any work.
+That Markdown file is the source of truth; this file is only the Codex custom-agent adapter.
+"""

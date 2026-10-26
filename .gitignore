@@ -4,3 +4,4 @@ dist/
 *.dmg
 .DS_Store
 PROJECT_LOG.md
+.claude/settings.local.json

@@ -1,0 +1,7 @@
+name = "implementor"
+description = "Implements an agreed change in the Glass Monitor Swift macOS app and verifies it."
+
+developer_instructions = """
+Read and follow the canonical profile at .claude/agents/implementor.md before doing any work.
+That Markdown file is the source of truth; this file is only the Codex custom-agent adapter.
+"""

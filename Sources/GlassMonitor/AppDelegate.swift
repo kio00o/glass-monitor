@@ -45,10 +45,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Start at login once; afterwards the right-click menu controls it.
+        // Not for debug builds: they live in .build and would replace the installed app at login.
+        #if !DEBUG
         if !UserDefaults.standard.bool(forKey: "loginItemOffered") {
             UserDefaults.standard.set(true, forKey: "loginItemOffered")
             try? SMAppService.mainApp.register()
         }
+        #endif
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let b = statusItem.button {
@@ -224,10 +227,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showMenu() {
         hide()
         let menu = NSMenu()
+        #if DEBUG
+        menu.addItem(debugMenu())
+        menu.addItem(.separator())
+        #else
         let login = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
+        #endif
         let limit = NSMenuItem(title: "Show Claude Limit in Menu Bar", action: #selector(toggleShowLimit), keyEquivalent: "")
         limit.target = self
         limit.state = showLimit ? .on : .off
@@ -248,6 +256,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    #if DEBUG
+    // MARK: Debug menu
+
+    private func debugMenu() -> NSMenuItem {
+        let root = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        func item(_ title: String, _ action: Selector, _ value: Any? = nil, on: Bool) -> NSMenuItem {
+            let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            i.target = self; i.representedObject = value; i.state = on ? .on : .off
+            return i
+        }
+
+        let sim = airAlerts.simulatedAlert
+        sub.addItem(item("Air Alert: Real", #selector(debugAlert(_:)), on: sim == nil))
+        sub.addItem(item("Air Alert: Yellow (drones)", #selector(debugAlert(_:)), "yellow", on: sim?.red == false))
+        sub.addItem(item("Air Alert: Red (missiles)", #selector(debugAlert(_:)), "red", on: sim?.red == true))
+        sub.addItem(.separator())
+
+        let pct = monitor.simulatedSessionPercent
+        sub.addItem(item("Claude Session: Real", #selector(debugClaude(_:)), on: pct == nil))
+        for p in [30.0, 45, 85, 100] {
+            sub.addItem(item("Claude Session: \(Int(p))%", #selector(debugClaude(_:)), p, on: pct == p))
+        }
+        sub.addItem(.separator())
+
+        sub.addItem(item("Low Battery (10%)", #selector(debugBattery), on: monitor.simulateLowBattery))
+        sub.addItem(item("Hot CPU (95%, 95 °C)", #selector(debugCPU), on: monitor.simulateHotCPU))
+        sub.addItem(.separator())
+        sub.addItem(item("Send Test Notification", #selector(debugNotify), on: false))
+
+        root.submenu = sub
+        return root
+    }
+
+    @objc private func debugAlert(_ sender: NSMenuItem) {
+        let place = airAlerts.watchedLabel ?? "Київська область"
+        switch sender.representedObject as? String {
+        case "yellow":
+            airAlerts.simulatedAlert = .init(regionName: place, red: false, since: Date().addingTimeInterval(-12 * 60),
+                                             reason: "Дронова загроза (жовтий рівень)",
+                                             threats: ["12:00 · ударні БпЛА — \(place): курсом на захід"])
+        case "red":
+            airAlerts.simulatedAlert = .init(regionName: place, red: true, since: Date().addingTimeInterval(-3 * 60),
+                                             reason: "Ракетна небезпека (червоний рівень)",
+                                             threats: ["12:00 · балістика — \(place): загроза застосування",
+                                                       "11:58 · крилаті ракети — \(place): курсом на північ"])
+        default:
+            airAlerts.simulatedAlert = nil
+        }
+    }
+
+    @objc private func debugClaude(_ sender: NSMenuItem) { monitor.simulatedSessionPercent = sender.representedObject as? Double }
+    @objc private func debugBattery() { monitor.simulateLowBattery.toggle() }
+    @objc private func debugCPU() { monitor.simulateHotCPU.toggle() }
+    @objc private func debugNotify() { Notifier.shared.sendTest() }
+    #endif
 
     // MARK: Panel
 

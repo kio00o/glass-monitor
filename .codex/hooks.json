@@ -1,0 +1,18 @@
+{
+  "description": "Glass Monitor hooks for Codex.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/check-branch-before-write.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking branch before write"
+          }
+        ]
+      }
+    ]
+  }
+}

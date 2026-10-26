@@ -13,7 +13,8 @@ let package = Package(
                 .linkedFramework("CoreLocation"),
                 .linkedFramework("IOBluetooth"),
             ]
-        )
+        ),
+        .testTarget(name: "GlassMonitorTests", dependencies: ["GlassMonitor"]),
     ],
     swiftLanguageModes: [.v5]
 )

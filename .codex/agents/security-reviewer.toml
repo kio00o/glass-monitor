@@ -1,0 +1,8 @@
+name = "security-reviewer"
+description = "Read-only security and privacy review of changed Glass Monitor code."
+sandbox_mode = "read-only"
+
+developer_instructions = """
+Read and follow the canonical profile at .claude/agents/security-reviewer.md before doing any work.
+That Markdown file is the source of truth; this file is only the Codex custom-agent adapter.
+"""

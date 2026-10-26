@@ -153,7 +153,27 @@ final class AirAlertMonitor: NSObject, ObservableObject, CLLocationManagerDelega
             threatLines = []
         }
         alert = a
+        #if DEBUG
+        applySimulation()
+        #endif
     }
+
+    #if DEBUG
+    /// Set from the Debug menu: pretends this alert is active in the watched area until cleared.
+    var simulatedAlert: ActiveAlert? {
+        didSet { applySimulation(); Task { await poll() } }
+    }
+
+    private func applySimulation() {
+        guard let s = simulatedAlert else { return }
+        alert = s
+        if let name = watchedOblast {
+            var o = oblasts[name] ?? OblastAlert()
+            o.whole = true; o.red = s.red; o.standing = false; o.since = s.since
+            oblasts[name] = o
+        }
+    }
+    #endif
 
     // MARK: What is flying (alerts.in.ua live report)
 

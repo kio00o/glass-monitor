@@ -5,7 +5,7 @@ import UserNotifications
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static let shared = Notifier()
-    static let thresholds = [20, 40, 80]
+    nonisolated static let thresholds = [20, 40, 80]
 
     func setup() {
         let c = UNUserNotificationCenter.current()
@@ -39,18 +39,20 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let stateKey = "notify.\(key)"
         let state = d.dictionary(forKey: stateKey)
         let reset = Int((w.resetsAt.timeIntervalSince1970 / 60).rounded())
-        let crossed = Self.thresholds.filter { w.percent >= Double($0) }
-        var fired = Set((state?["fired"] as? [Int]) ?? [])
+        let r = Self.decide(percent: w.percent, reset: reset, prevReset: state?["reset"] as? Int,
+                            fired: Set((state?["fired"] as? [Int]) ?? []))
+        if let top = r.announce { send(threshold: top, window: w, name: name, key: key) }
+        d.set(["reset": reset, "fired": Array(r.fired)], forKey: stateKey)
+    }
 
-        if let prev = state?["reset"] as? Int, abs(prev - reset) <= 10 {
-            // same window: announce only the highest threshold newly crossed
-            let fresh = crossed.filter { !fired.contains($0) }
-            if let top = fresh.max() { send(threshold: top, window: w, name: name, key: key) }
-            fired.formUnion(crossed)
-        } else {
-            fired = Set(crossed)   // new window or first run: what's already crossed isn't news
-        }
-        d.set(["reset": reset, "fired": Array(fired)], forKey: stateKey)
+    /// `reset` is the window's reset time in minutes; resets within 10 min of the stored one are the same window.
+    /// Returns the threshold to announce (if any) and the thresholds to remember as already crossed.
+    nonisolated static func decide(percent: Double, reset: Int, prevReset: Int?, fired: Set<Int>) -> (announce: Int?, fired: Set<Int>) {
+        let crossed = thresholds.filter { percent >= Double($0) }
+        // new window or first run: what's already crossed isn't news
+        guard let prevReset, abs(prevReset - reset) <= 10 else { return (nil, Set(crossed)) }
+        // same window: announce only the highest threshold newly crossed
+        return (crossed.filter { !fired.contains($0) }.max(), fired.union(crossed))
     }
 
     private func send(threshold: Int, window w: Monitor.ClaudeWindow, name: String, key: String) {
