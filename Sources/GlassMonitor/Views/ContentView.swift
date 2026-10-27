@@ -50,6 +50,8 @@ struct ContentView: View {
                 MemoryPage().transition(.opacity)
             } else if m.page == .alerts {
                 AlertsPage().transition(.opacity)
+            } else if m.page == .settings {
+                SettingsPage().transition(.opacity)
             } else {
                 mainPage.transition(.opacity)
             }
@@ -80,25 +82,67 @@ struct ContentView: View {
         }
     }
 
+    /// Half-size slots flowing two per row: the mascot, each enabled widget, then the Widgets box.
+    /// The settings box is its own tile, so it never overlaps the full-width alert card below.
+    private enum Slot: Equatable { case mascot, widget(Monitor.Widget), settings }
+
+    private var slots: [Slot] {
+        [.mascot] + [.disk, .memory, .claude, .wifi, .battery, .devices].filter(m.isEnabled).map(Slot.widget) + [.settings]
+    }
+
+    @ViewBuilder private func slotView(_ slot: Slot?) -> some View {
+        switch slot {
+        case .mascot: EyesPanel()
+        case .settings: settingsBox
+        case .widget(.disk): disk
+        case .widget(.memory): memory
+        case .widget(.claude): claude
+        case .widget(.wifi): wifi
+        case .widget(.battery): battery
+        case .widget(.devices): devices
+        case .widget(.alerts), .none: Color.clear   // alerts span full width below; nil keeps a lone tile half width
+        }
+    }
+
     private var mainPage: some View {
-        ZStack {
-            GlassGroup {
-                VStack(spacing: 10) {
-                    HStack(spacing: 10) { EyesPanel(); disk }.frame(height: 90)
-                    HStack(spacing: 10) { memory; claude }.frame(height: 90)
-                    HStack(alignment: .top, spacing: 10) {
-                        wifi.frame(height: 160)
-                        VStack(spacing: 10) { battery.frame(height: 75); devices.frame(height: 75) }
+        let s = slots
+        let rowCount = (s.count + 1) / 2
+        return GlassGroup {
+            VStack(spacing: 10) {
+                ForEach(0..<rowCount, id: \.self) { row in
+                    HStack(spacing: 10) {
+                        slotView(row * 2 < s.count ? s[row * 2] : nil)
+                        slotView(row * 2 + 1 < s.count ? s[row * 2 + 1] : nil)
                     }
-                    AirAlertCard()
+                    .frame(height: 90)
                 }
-                .padding(12)
-                .background {
-                    Button("") { NSApplication.shared.terminate(nil) }
-                        .keyboardShortcut("q").frame(width: 0, height: 0).opacity(0)
-                }
+                if m.isEnabled(.alerts) { AirAlertCard() }
+            }
+            .padding(12)
+            .background {
+                Button("") { NSApplication.shared.terminate(nil) }
+                    .keyboardShortcut("q").frame(width: 0, height: 0).opacity(0)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: s)
+    }
+
+    private var settingsBox: some View {
+        Button { m.page = .settings } label: {
+            Card(fill: true) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "slider.horizontal.3").font(.system(size: 19))
+                        .foregroundStyle(Color.primary).frame(width: 30, height: 30)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Title(text: "Widgets")
+                        Subtitle(text: "Customize")
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .contentShape(.rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
     }
 
     private var disk: some View {
@@ -183,28 +227,22 @@ struct ContentView: View {
     }
 
     private var wifi: some View {
-        Card {
-            HStack(spacing: 10) {
+        Card(fill: true) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: m.ssid == nil ? "wifi.slash" : "wifi")
                     .font(.system(size: 19, weight: .medium)).foregroundStyle(Color.primary)
-                    .frame(width: 30)
-                Title(text: m.ssid ?? "Wi-Fi")
+                    .frame(width: 30, height: 30)
+                VStack(alignment: .leading, spacing: 3) {
+                    Title(text: m.ssid ?? "Wi-Fi")
+                    HStack(spacing: 10) { speedRow("arrow.up", m.up); speedRow("arrow.down", m.down) }
+                }
             }
-            VStack(alignment: .leading, spacing: 14) {
-                speedRow("arrow.up", m.up)
-                speedRow("arrow.down", m.down)
-            }
-            .padding(.top, 16).padding(.leading, 5)
-
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
             HStack {
                 Spacer()
-                switch m.speedTest {
-                case .running:
+                if case .running = m.speedTest {
                     HStack(spacing: 6) { ProgressView().controlSize(.small); Subtitle(text: "Testing…") }
-                case .failed:
-                    ActionLink(text: "Test Speed", action: m.openNetwork)
-                default:
+                } else {
                     ActionLink(text: "Test Speed", action: m.openNetwork)
                 }
             }
@@ -212,11 +250,11 @@ struct ContentView: View {
     }
 
     private func speedRow(_ icon: String, _ v: Double) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold)).frame(width: 20)
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 10, weight: .semibold)).frame(width: 10)
                 .foregroundStyle(Color.primary)
-            Text(formatSpeed(v)).font(.system(size: 11.5)).monospacedDigit()
-                .foregroundStyle(Color.primary.opacity(0.62))
+            Text(formatSpeed(v)).font(.system(size: 11)).monospacedDigit()
+                .foregroundStyle(Color.primary.opacity(0.62)).lineLimit(1).fixedSize()
         }
     }
 

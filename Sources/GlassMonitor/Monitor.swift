@@ -35,8 +35,31 @@ final class Monitor: ObservableObject {
     struct ClaudeWindow { var percent: Double; var resetsAt: Date }
     struct ClaudeLimits { var fiveHour: ClaudeWindow?; var sevenDay: ClaudeWindow? }
     @Published var claude: ClaudeLimits?
-    enum Page { case main, network, claude, memory, alerts }
+    enum Page { case main, network, claude, memory, alerts, settings }
     @Published var page: Page = .main
+
+    /// Panel cards the user can show or hide (the mascot is always shown). Order is the layout order.
+    enum Widget: String, CaseIterable {
+        case disk, memory, claude, wifi, battery, devices, alerts
+        var title: String {
+            switch self {
+            case .disk: return "Disk"; case .memory: return "Memory"; case .claude: return "Claude"
+            case .wifi: return "Wi-Fi"; case .battery: return "Battery"; case .devices: return "Bluetooth"
+            case .alerts: return "Air Alerts"
+            }
+        }
+    }
+    private static let widgetsKey = "enabledWidgets"
+    @Published var enabledWidgets: Set<Widget> = {
+        guard let raw = UserDefaults.standard.array(forKey: widgetsKey) as? [String] else { return Set(Widget.allCases) }
+        return Set(raw.compactMap(Widget.init))
+    }()
+
+    func isEnabled(_ w: Widget) -> Bool { enabledWidgets.contains(w) }
+    func toggle(_ w: Widget) {
+        if enabledWidgets.contains(w) { enabledWidgets.remove(w) } else { enabledWidgets.insert(w) }
+        UserDefaults.standard.set(enabledWidgets.map(\.rawValue), forKey: Self.widgetsKey)
+    }
     @Published var downHistory = [Double](repeating: 0, count: 40)
     @Published var upHistory = [Double](repeating: 0, count: 40)
     @Published var totalDown: UInt64 = 0
