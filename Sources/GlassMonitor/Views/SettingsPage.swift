@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Pick which cards appear on the main panel. The mascot is always shown and is not listed.
+/// Show/hide and reorder the panel cards. The mascot is always shown and is not listed.
+/// Drag a row by its handle to reorder; up to `maxWidgets` can be on at once.
 struct SettingsPage: View {
     @EnvironmentObject var m: Monitor
 
@@ -8,6 +9,7 @@ struct SettingsPage: View {
         switch w {
         case .disk: return "internaldrive"
         case .memory: return "memorychip"
+        case .cpu: return "cpu"
         case .claude: return "sparkles"
         case .wifi: return "wifi"
         case .battery: return "battery.100percent"
@@ -29,37 +31,48 @@ struct SettingsPage: View {
                     .buttonStyle(.plain)
                     Text("Widgets").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.primary)
                     Spacer()
-                    Text("\(m.enabledWidgets.count) of \(Monitor.Widget.allCases.count)")
+                    Text("\(m.enabledWidgets.count) of \(Monitor.maxWidgets)")
                         .font(.system(size: 11.5)).foregroundStyle(Color.primary.opacity(0.62))
                 }
-                VStack(spacing: 0) {
-                    ForEach(Array(Monitor.Widget.allCases.enumerated()), id: \.element) { i, w in
-                        Button { m.toggle(w) } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: icon(w)).font(.system(size: 14))
-                                    .foregroundStyle(Color.primary).frame(width: 24)
-                                Text(w.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.primary)
-                                Spacer()
-                                Image(systemName: m.isEnabled(w) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(m.isEnabled(w) ? Color.primary : Color.primary.opacity(0.3))
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        if i != Monitor.Widget.allCases.count - 1 {
-                            Divider().overlay(Color.primary.opacity(0.08)).padding(.leading, 48)
-                        }
+                List {
+                    ForEach(m.widgetOrder, id: \.self) { w in
+                        row(w)
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
+                    .onMove { m.moveWidgets(from: $0, to: $1) }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .frame(height: CGFloat(Monitor.Widget.allCases.count) * 44)
                 .glass(.rect(cornerRadius: 16))
-                Text("The mascot is always shown. Changes apply right away.")
+                Text("The mascot is always shown. Up to \(Monitor.maxWidgets) cards; turn one off to add another. Drag the handle to reorder.")
                     .font(.system(size: 10.5)).foregroundStyle(Color.primary.opacity(0.45))
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 4).fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
         }
+    }
+
+    private func row(_ w: Monitor.Widget) -> some View {
+        let on = m.isEnabled(w)
+        let locked = !m.canEnable(w)   // at the cap and this one is off
+        return HStack(spacing: 10) {
+            Image(systemName: icon(w)).font(.system(size: 14)).foregroundStyle(Color.primary).frame(width: 24)
+            Text(w.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.primary)
+            Spacer()
+            Button { m.toggle(w) } label: {
+                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 16))
+                    .foregroundStyle(on ? Color.primary : Color.primary.opacity(0.3))
+            }
+            .buttonStyle(.plain).disabled(locked)
+            Image(systemName: "line.3.horizontal").font(.system(size: 13))
+                .foregroundStyle(Color.primary.opacity(0.35))
+        }
+        .padding(.horizontal, 14).frame(height: 44)
+        .opacity(locked ? 0.4 : 1)
+        .overlay(alignment: .bottom) { Divider().overlay(Color.primary.opacity(0.08)).padding(.leading, 48) }
     }
 }

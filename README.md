@@ -14,6 +14,8 @@ Disk, memory (with a list of the heaviest apps you can quit), battery, Claude pl
 
 Works on macOS 14 (Sonoma) or newer, on Apple Silicon and Intel. On macOS 26 it uses Liquid Glass, on older systems a frosted material. It adds itself to Login Items on first launch (toggle it from the right-click menu on the menu-bar icon).
 
+The **Widgets** box on the panel opens a page to show, hide and drag-reorder the cards (disk, memory, CPU, Claude, Wi-Fi, Bluetooth, battery, air alerts), up to seven at a time.
+
 ### Claude limits
 
 The Claude card reads the OAuth token Claude Code keeps in your Keychain ("Claude Code-credentials") and asks

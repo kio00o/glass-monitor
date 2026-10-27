@@ -40,25 +40,49 @@ final class Monitor: ObservableObject {
 
     /// Panel cards the user can show or hide (the mascot is always shown). Order is the layout order.
     enum Widget: String, CaseIterable {
-        case disk, memory, claude, wifi, battery, devices, alerts
+        case disk, memory, cpu, claude, wifi, battery, devices, alerts
         var title: String {
             switch self {
-            case .disk: return "Disk"; case .memory: return "Memory"; case .claude: return "Claude"
-            case .wifi: return "Wi-Fi"; case .battery: return "Battery"; case .devices: return "Bluetooth"
-            case .alerts: return "Air Alerts"
+            case .disk: return "Disk"; case .memory: return "Memory"; case .cpu: return "CPU"
+            case .claude: return "Claude"; case .wifi: return "Wi-Fi"; case .battery: return "Battery"
+            case .devices: return "Bluetooth"; case .alerts: return "Air Alerts"
             }
         }
     }
+    static let maxWidgets = 7   // the panel's grid holds this many before it gets too tall
     private static let widgetsKey = "enabledWidgets"
+    private static let orderKey = "widgetOrder"
+
     @Published var enabledWidgets: Set<Widget> = {
-        guard let raw = UserDefaults.standard.array(forKey: widgetsKey) as? [String] else { return Set(Widget.allCases) }
-        return Set(raw.compactMap(Widget.init))
+        // default: everything except CPU (7), so it stays at the cap and upgraded users keep their layout
+        guard let raw = UserDefaults.standard.array(forKey: widgetsKey) as? [String] else {
+            return Set(Widget.allCases).subtracting([.cpu])
+        }
+        return Set(raw.compactMap(Widget.init).prefix(maxWidgets))
     }()
 
+    /// Display order of every widget; the panel shows this order filtered to the enabled ones.
+    @Published var widgetOrder: [Widget] = {
+        let saved = (UserDefaults.standard.array(forKey: orderKey) as? [String])?.compactMap(Widget.init) ?? []
+        return saved + Widget.allCases.filter { !saved.contains($0) }   // append any widget missing from an old save
+    }()
+
+    var orderedEnabled: [Widget] { widgetOrder.filter(enabledWidgets.contains) }
+
     func isEnabled(_ w: Widget) -> Bool { enabledWidgets.contains(w) }
+    /// At the cap, enabling is blocked (turn something off first); disabling always works.
+    func canEnable(_ w: Widget) -> Bool { enabledWidgets.contains(w) || enabledWidgets.count < Self.maxWidgets }
+
     func toggle(_ w: Widget) {
-        if enabledWidgets.contains(w) { enabledWidgets.remove(w) } else { enabledWidgets.insert(w) }
+        if enabledWidgets.contains(w) { enabledWidgets.remove(w) }
+        else if enabledWidgets.count < Self.maxWidgets { enabledWidgets.insert(w) }
+        else { return }
         UserDefaults.standard.set(enabledWidgets.map(\.rawValue), forKey: Self.widgetsKey)
+    }
+
+    func moveWidgets(from source: IndexSet, to destination: Int) {
+        widgetOrder.move(fromOffsets: source, toOffset: destination)
+        UserDefaults.standard.set(widgetOrder.map(\.rawValue), forKey: Self.orderKey)
     }
     @Published var downHistory = [Double](repeating: 0, count: 40)
     @Published var upHistory = [Double](repeating: 0, count: 40)

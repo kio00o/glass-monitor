@@ -82,6 +82,33 @@ struct DriveIcon: View {
 
 /// Memory card: contacts in a scalloped notch on top (see-through), a side notch,
 /// and a cut-out window at the bottom. Tall and narrow.
+/// Processor: a square die with see-through pins on all four sides. Distinct from the RAM SD-card.
+struct CpuIcon: View {
+    var tint: Color = .primary
+    var body: some View {
+        Canvas { ctx, size in
+            let s: CGFloat = 15
+            let ox = (size.width - s) / 2, oy = (size.height - s) / 2
+            func r(_ x: CGFloat, _ y: CGFloat, _ rw: CGFloat, _ rh: CGFloat) -> CGRect { CGRect(x: ox + x, y: oy + y, width: rw, height: rh) }
+            let solid = GraphicsContext.Shading.color(tint)
+            let pins: [CGFloat] = [2.6, 6.6, 10.6]   // 3 per side
+
+            for p in pins {                            // translucent pins poking out of each edge
+                ctx.fill(Path(roundedRect: r(p, -2.2, 1.8, 3.4), cornerRadius: 0.9), with: .color(tint.opacity(0.5)))
+                ctx.fill(Path(roundedRect: r(p, s - 1.2, 1.8, 3.4), cornerRadius: 0.9), with: .color(tint.opacity(0.5)))
+                ctx.fill(Path(roundedRect: r(-2.2, p, 3.4, 1.8), cornerRadius: 0.9), with: .color(tint.opacity(0.5)))
+                ctx.fill(Path(roundedRect: r(s - 1.2, p, 3.4, 1.8), cornerRadius: 0.9), with: .color(tint.opacity(0.5)))
+            }
+            ctx.drawLayer { l in                       // body with a cut-out inner die
+                l.fill(Path(roundedRect: r(0, 0, s, s), cornerRadius: 3.4), with: solid)
+                l.blendMode = .destinationOut
+                l.fill(Path(roundedRect: r(4.4, 4.4, s - 8.8, s - 8.8), cornerRadius: 1.4), with: solid)
+            }
+        }
+        .frame(width: 30, height: 30)
+    }
+}
+
 struct MemoryCardIcon: View {
     var body: some View {
         Canvas { ctx, size in
