@@ -19,7 +19,8 @@ as an ad-hoc-signed DMG on GitHub Releases.
    Silicon, read-only AppleSMC on Intel.
   - `ClaudeUsage.swift` — OAuth token from the Keychain → undocumented Anthropic usage endpoint.
   - `AirAlerts.swift` — siren.pp.ua alerts, alerts.in.ua threat report, local region matching, map.
-  - `Updater.swift` — GitHub Releases latest → optional menu-bar Update, replaces this `.app` from the DMG.
+  - `Updater.swift` — GitHub Releases latest → optional menu-bar Update (plus a once-per-version
+   notification and an icon dot), replaces this `.app` from the DMG.
   - `Eyes.swift` (mascot), `Notifier.swift` (limit notifications).
   - `Views/` — `ContentView.swift` (main panel and page switching), one file per page
     (`NetworkPage`, `ClaudePage`, `MemoryPage`, `AlertsPage` with the main-panel alert card),

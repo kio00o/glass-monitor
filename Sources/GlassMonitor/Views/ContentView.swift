@@ -38,6 +38,7 @@ private struct Backdrop: View {
 struct ContentView: View {
     @EnvironmentObject var m: Monitor
     @EnvironmentObject var eyes: EyesModel
+    @EnvironmentObject var updater: Updater
 
     var body: some View {
         ZStack {
@@ -127,6 +128,7 @@ struct ContentView: View {
                     if m.isEnabled(.alerts) { AirAlertCard() } else { Spacer(minLength: 0) }
                     settingsSquare
                 }
+                if let v = updater.available { updateBanner(v) }
             }
             .padding(12)
             .background {
@@ -135,6 +137,28 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: m.orderedEnabled)
+    }
+
+    /// Full-width banner under all widgets when a newer version is out; tap to install.
+    private func updateBanner(_ version: String) -> some View {
+        let red = Color(red: 1, green: 0.27, blue: 0.23)
+        let text = updater.installing ? "Updating…" : updater.failed ? "Update failed — tap to retry" : "Update to \(version) available"
+        return Button { updater.install() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: updater.failed ? "arrow.triangle.2.circlepath" : "arrow.down.circle.fill")
+                    .font(.system(size: 16)).foregroundStyle(red)
+                Text(text).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.primary)
+                Spacer(minLength: 0)
+                if updater.installing { ProgressView().controlSize(.small) }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glass(.rect(cornerRadius: 16))
+            .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(red.opacity(0.5), lineWidth: 1) }
+            .contentShape(.rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .disabled(updater.installing)
     }
 
     /// Icon-only box in the bottom row; stretches to the alert card's height, 54 pt tall when alone.

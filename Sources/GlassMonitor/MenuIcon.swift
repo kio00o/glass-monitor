@@ -9,6 +9,7 @@ final class MenuIconModel: ObservableObject {
     private var anger: CGFloat = 0
     private var angerTask: Task<Void, Never>?
 
+
     /// Air-raid alert: the eyes get angry and sink (animated), white as usual.
     var alert = false {
         didSet {

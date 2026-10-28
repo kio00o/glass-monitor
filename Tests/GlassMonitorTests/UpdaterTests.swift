@@ -91,4 +91,10 @@ import Testing
         #expect(!Updater.isNewer("nope", than: "1.6.1"))
         #expect(!Updater.isNewer("1..2", than: "1.0.0"))
     }
+
+    @Test func notifyOncePerVersion() {
+        #expect(Updater.shouldNotify(version: "1.6.2", lastNotified: nil))        // never announced
+        #expect(!Updater.shouldNotify(version: "1.6.2", lastNotified: "1.6.2"))   // already announced this one
+        #expect(Updater.shouldNotify(version: "1.6.3", lastNotified: "1.6.2"))    // a later version announces again
+    }
 }

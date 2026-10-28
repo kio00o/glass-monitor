@@ -92,6 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.refreshDroneImage() }
         }
         airAlerts.start()
+        // A newer version: notify once, badge the menu-bar icon, and let the notification tap install it.
+        updater.onNewVersion = { Notifier.shared.updateAvailable($0) }
+        Notifier.shared.onUpdateTapped = { [weak self] in self?.updater.install() }
+        updater.$available.map { $0 != nil }.removeDuplicates().receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.setUpdateBadge($0) }.store(in: &cancellables)
         #if !DEBUG
         updater.start()
         #endif
@@ -105,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Timer.publish(every: 30, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in self?.updateStatusTitle() }.store(in: &cancellables)
 
-        host = NSHostingController(rootView: AnyView(PanelRoot().environmentObject(monitor).environmentObject(eyes).environmentObject(airAlerts)))
+        host = NSHostingController(rootView: AnyView(PanelRoot().environmentObject(monitor).environmentObject(eyes).environmentObject(airAlerts).environmentObject(updater)))
         host.sizingOptions = [.preferredContentSize]
         host.view.wantsLayer = true
         host.view.layer?.backgroundColor = .clear
@@ -153,6 +158,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if !on, !Task.isCancelled { NSStatusBar.system.removeStatusItem(item); droneItem = nil }
         }
+    }
+
+    /// Red update dot as a coloured subview on the status button (the eyes stay a template that adapts to the bar).
+    private var updateDot: NSView?
+    private func setUpdateBadge(_ on: Bool) {
+        updateDot?.removeFromSuperview()
+        updateDot = nil
+        guard on, let button = statusItem?.button else { return }
+        let d: CGFloat = 5
+        let dot = NSView(frame: NSRect(x: button.bounds.maxX - d - 1, y: button.bounds.maxY - d - 3, width: d, height: d))
+        dot.wantsLayer = true
+        dot.layer?.backgroundColor = NSColor.systemRed.cgColor
+        dot.layer?.cornerRadius = d / 2
+        dot.autoresizingMask = [.minXMargin, .minYMargin]
+        button.addSubview(dot)
+        updateDot = dot
     }
 
     /// Draw the drone black or white to match the current menu bar, with a red/yellow severity dot.

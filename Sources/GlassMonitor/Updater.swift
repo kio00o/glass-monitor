@@ -19,6 +19,25 @@ final class Updater: ObservableObject {
     private var release: Release?
     private var timer: Timer?
 
+    /// Fired once per version when a newer release first appears, so a notification isn't repeated daily.
+    var onNewVersion: ((String) -> Void)?
+    private static let notifiedKey = "updaterLastNotifiedVersion"
+    private var lastNotifiedVersion: String? {
+        get { UserDefaults.standard.string(forKey: Self.notifiedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.notifiedKey) }
+    }
+
+    /// Announce only a version not announced before (a later, different version announces again).
+    nonisolated static func shouldNotify(version: String, lastNotified: String?) -> Bool {
+        version != lastNotified
+    }
+
+    private func announce(_ version: String) {
+        guard Self.shouldNotify(version: version, lastNotified: lastNotifiedVersion) else { return }
+        lastNotifiedVersion = version
+        onNewVersion?(version)
+    }
+
     private static let api = URL(string: "https://api.github.com/repos/kio00o/glass-monitor/releases/latest")!
     nonisolated private static let bundleId = "dev.local.glassmonitor"
     nonisolated private static let userAgent = "GlassMonitor (github.com/kio00o/glass-monitor)"
@@ -79,6 +98,7 @@ final class Updater: ObservableObject {
         if on, let url = Self.dmgURL("https://github.com/kio00o/glass-monitor/releases/download/v9.9.9/GlassMonitor.dmg", tag: "v9.9.9") {
             release = Release(version: "9.9.9", dmg: url, bytes: 1)
             available = "9.9.9"
+            announce("9.9.9")
         } else {
             release = nil
             available = nil
@@ -101,6 +121,7 @@ final class Updater: ObservableObject {
         if Self.isNewer(rel.version, than: Self.currentVersion()) {
             release = rel
             available = rel.version
+            announce(rel.version)
         } else {
             release = nil
             available = nil

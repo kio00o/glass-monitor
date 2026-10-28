@@ -1,11 +1,15 @@
 import Foundation
 import UserNotifications
 
-/// macOS notifications when Claude plan usage first crosses 20 / 40 / 80 % in a window.
+/// macOS notifications: Claude plan usage crossings, and a newer app version being available.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static let shared = Notifier()
     nonisolated static let thresholds = [20, 40, 80]
+    nonisolated private static let updateCategory = "update-available"
+
+    /// Tapping the update notification runs this (wired to the updater's install in AppDelegate).
+    var onUpdateTapped: (() -> Void)?
 
     func setup() {
         let c = UNUserNotificationCenter.current()
@@ -17,6 +21,26 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler handler: @escaping (UNNotificationPresentationOptions) -> Void) {
         handler([.banner, .sound])
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler handler: @escaping () -> Void) {
+        let isUpdate = response.notification.request.content.categoryIdentifier == Self.updateCategory
+        Task { @MainActor in
+            if isUpdate { self.onUpdateTapped?() }
+            handler()
+        }
+    }
+
+    /// A newer version is out; tapping starts the update.
+    func updateAvailable(_ version: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Glass Monitor \(version) is available"
+        content.body = "Click to update."
+        content.sound = .default
+        content.categoryIdentifier = Self.updateCategory
+        let req = UNNotificationRequest(identifier: "update-\(version)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req)
     }
 
     func sendTest() {

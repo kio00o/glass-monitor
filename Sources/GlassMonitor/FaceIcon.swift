@@ -58,7 +58,8 @@ enum FaceIcon {
         }
     }
 
-    /// Menu-bar image (template, so macOS tints it for light/dark bars).
+    /// Menu-bar image (template, so macOS tints it for light/dark bars). The red update dot is a
+    /// separate coloured subview on the status button, so the eyes keep adapting to the bar.
     static func menuBar(blink: CGFloat, look: CGFloat, anger: CGFloat = 0) -> NSImage {
         let img = NSImage(size: NSSize(width: 28, height: 18), flipped: false) { rect in
             drawEyesOnly(in: rect.insetBy(dx: 2, dy: 2), blink: blink, look: look, color: .black, anger: anger)
