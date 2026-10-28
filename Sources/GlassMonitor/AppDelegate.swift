@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let eyes = EyesModel()
     private let menuIcon = MenuIconModel()
     private let airAlerts = AirAlertMonitor()
+    private let updater = Updater()
     private var droneItem: NSStatusItem?
     private var droneTask: Task<Void, Never>?
     private var alertRed = false
@@ -91,6 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.refreshDroneImage() }
         }
         airAlerts.start()
+        #if !DEBUG
+        updater.start()
+        #endif
         eyes.alarmed = { [airAlerts] in airAlerts.alert != nil }
         airAlerts.$alert.map { $0 != nil }.removeDuplicates().dropFirst().receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.eyes.nudge() }.store(in: &cancellables)
@@ -273,6 +277,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(temp)
         menu.addItem(alertRegionMenu())
         menu.addItem(.separator())
+        if updater.installing {
+            let u = NSMenuItem(title: "Updating…", action: nil, keyEquivalent: "")
+            u.isEnabled = false
+            menu.addItem(u)
+        } else if updater.failed {
+            let u = NSMenuItem(title: "Update failed — try again", action: #selector(installUpdate), keyEquivalent: "")
+            u.target = self
+            menu.addItem(u)
+        } else if let v = updater.available {
+            let u = NSMenuItem(title: "Update to \(v)", action: #selector(installUpdate), keyEquivalent: "")
+            u.target = self
+            menu.addItem(u)
+        }
         let quit = NSMenuItem(title: "Quit Glass Monitor", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -286,6 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if s.status == .enabled { try? s.unregister() } else { try? s.register() }
     }
 
+    @objc private func installUpdate() { updater.install() }
     @objc private func quit() { NSApp.terminate(nil) }
 
     #if DEBUG
@@ -315,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         sub.addItem(item("Low Battery (10%)", #selector(debugBattery), on: monitor.simulateLowBattery))
         sub.addItem(item("Hot CPU (95%, 97 °C)", #selector(debugCPU), on: monitor.simulateHotCPU))
+        sub.addItem(item("Update Available (9.9.9)", #selector(debugUpdate), on: updater.available != nil))
         sub.addItem(.separator())
         sub.addItem(item("Send Test Notification", #selector(debugNotify), on: false))
 
@@ -342,6 +361,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func debugClaude(_ sender: NSMenuItem) { monitor.simulatedSessionPercent = sender.representedObject as? Double }
     @objc private func debugBattery() { monitor.simulateLowBattery.toggle() }
     @objc private func debugCPU() { monitor.simulateHotCPU.toggle() }
+    @objc private func debugUpdate() { updater.simulate(updater.available == nil) }
     @objc private func debugNotify() { Notifier.shared.sendTest() }
 
     /// The Debug menu without clicking, for scripted checks: `./dev.sh cmd show`, `./dev.sh cmd hot-cpu`, …
@@ -351,6 +371,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "hide": hide()
         case "hot-cpu": monitor.simulateHotCPU.toggle()
         case "low-battery": monitor.simulateLowBattery.toggle()
+        case "update-on": updater.simulate(true)
+        case "update-off": updater.simulate(false)
+        case "update": updater.install()
         case "alert-yellow", "alert-red", "alert-off":
             let item = NSMenuItem(); item.representedObject = cmd == "alert-off" ? nil : String(cmd.dropFirst(6))
             debugAlert(item)

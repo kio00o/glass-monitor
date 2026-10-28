@@ -19,6 +19,7 @@ as an ad-hoc-signed DMG on GitHub Releases.
    Silicon, read-only AppleSMC on Intel.
   - `ClaudeUsage.swift` — OAuth token from the Keychain → undocumented Anthropic usage endpoint.
   - `AirAlerts.swift` — siren.pp.ua alerts, alerts.in.ua threat report, local region matching, map.
+  - `Updater.swift` — GitHub Releases latest → optional menu-bar Update, replaces this `.app` from the DMG.
   - `Eyes.swift` (mascot), `Notifier.swift` (limit notifications).
   - `Views/` — `ContentView.swift` (main panel and page switching), one file per page
     (`NetworkPage`, `ClaudePage`, `MemoryPage`, `AlertsPage` with the main-panel alert card),
@@ -35,7 +36,7 @@ as an ad-hoc-signed DMG on GitHub Releases.
 | `swift build` | compile check (debug) |
 | `swift test` | unit tests |
 | `./dev.sh` / `./dev.sh lldb` | debug `.app` (`dev.local.glassmonitor.dev`) that runs beside the installed release; logs in the terminal |
-| `./dev.sh cmd <show\|hide\|hot-cpu\|low-battery\|alert-yellow\|alert-red\|alert-off\|claude-NN>` | drive the running dev build's Debug menu without clicking |
+| `./dev.sh cmd <show\|hide\|hot-cpu\|low-battery\|alert-yellow\|alert-red\|alert-off\|claude-NN\|update-on\|update-off\|update>` | drive the running dev build's Debug menu without clicking |
 | `GM_LOG=/tmp/gm.log ./dev.sh` | app output to a file (an agent shell has no terminal, so output is lost otherwise) |
 | `./build.sh` | release universal app, installs to `~/Applications` |
 | `./make_dmg.sh` | release build + `dist/GlassMonitor.dmg` |
@@ -45,7 +46,7 @@ as an ad-hoc-signed DMG on GitHub Releases.
 - Do not judge behaviour with `swift run`: a bare binary has no assets, and macOS attributes
   Location / Bluetooth / Keychain prompts to the terminal instead of the app.
 - In a debug build, right-click the menu-bar icon → **Debug** to simulate an air-raid alert,
-  a Claude session percentage, low battery or a hot CPU.
+  a Claude session percentage, low battery, a hot CPU or an available update.
 - To check behaviour without clicking: `GM_LOG=… ./dev.sh`, then `./dev.sh cmd …`, and a temporary
   `print` read from the log. Remove the prints afterwards. `screencapture` needs Screen Recording
   permission for the agent's app; without it, ask the user to look.
@@ -77,7 +78,9 @@ as an ad-hoc-signed DMG on GitHub Releases.
 - `Process` gets a fixed executable path and an argument array — never a shell string.
 - Network calls use HTTPS with a timeout and keep the last good state on failure. Respect the
   backoff: Claude usage ≥ 5 min and doubling on failure; alerts.in.ua at most once a minute
-  and only while an alert is active.
+  and only while an alert is active; GitHub Releases at launch and at most once a day.
+  The updater only downloads `GlassMonitor.dmg` from `github.com/kio00o/glass-monitor` and
+  only replaces this `.app` after the mounted bundle id matches `dev.local.glassmonitor`.
 - Treat every network response as untrusted: `Decodable` or optional casts, no force-unwraps.
 - The air-alert feature is not an official warning system; never word it as authoritative.
 

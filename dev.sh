@@ -3,7 +3,7 @@
 # with stdout/stderr in this terminal. Ctrl+C quits it.
 #   ./dev.sh        build + run
 #   ./dev.sh lldb   build + run under lldb (attaches as soon as it starts)
-#   ./dev.sh cmd <show|hide|hot-cpu|low-battery|alert-yellow|alert-red|alert-off|claude-NN>
+#   ./dev.sh cmd <show|hide|hot-cpu|low-battery|alert-yellow|alert-red|alert-off|claude-NN|update-on|update-off|update>
 #                   drive the running dev build's Debug menu without clicking
 #   GM_LOG=<file>   send the app's output to a file instead of this terminal
 # Own bundle id, so it has its own settings and permissions and runs next to the installed release.
