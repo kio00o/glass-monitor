@@ -40,7 +40,7 @@ as an ad-hoc-signed DMG on GitHub Releases.
 | `./dev.sh cmd <show\|hide\|hot-cpu\|low-battery\|alert-yellow\|alert-red\|alert-off\|claude-NN\|update-on\|update-off\|update>` | drive the running dev build's Debug menu without clicking |
 | `GM_LOG=/tmp/gm.log ./dev.sh` | app output to a file (an agent shell has no terminal, so output is lost otherwise) |
 | `./build.sh` | release universal app, installs to `~/Applications` |
-| `./make_dmg.sh` | release build + `dist/GlassMonitor.dmg` |
+| `./make_dmg.sh` | release build + `dist/GlassMonitor.dmg` (app, Install.command, Applications link) |
 
 - SwiftPM starts its own sandbox, so `swift build` / `swift test` fail inside an agent
   sandbox with `sandbox_apply: Operation not permitted`. Run them unsandboxed.

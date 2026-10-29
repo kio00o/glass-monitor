@@ -5,12 +5,11 @@ Disk, memory (with a list of the heaviest apps you can quit), battery, Claude pl
 
 ## Install
 
-1. Download `GlassMonitor.dmg` from the latest [release](../../releases), open it, drag **Glass Monitor** to Applications.
-2. The app is ad-hoc signed (not notarized), so macOS will block the first launch. Either right-click the app → **Open**, or run:
-   ```
-   xattr -cr /Applications/GlassMonitor.app
-   ```
-3. Allow Location (needed to read the Wi-Fi name) and Bluetooth when asked.
+1. Download `GlassMonitor.dmg` from the latest [release](../../releases) and open it.
+2. Double-click **Install** (not the app). That copies Glass Monitor to Applications and skips the macOS malware warning — the app is ad-hoc signed, not notarized. If macOS blocks Install, right-click it → **Open**.
+3. Allow Location (Wi-Fi name) and Bluetooth when asked.
+
+To install by dragging the app instead: **System Settings → Privacy & Security → Open Anyway**, or `xattr -cr /Applications/GlassMonitor.app`.
 
 Works on macOS 14 (Sonoma) or newer, on Apple Silicon and Intel. On macOS 26 it uses Liquid Glass, on older systems a frosted material. It adds itself to Login Items on first launch (toggle it from the right-click menu on the menu-bar icon). Later versions appear there as **Update to …** when a newer GitHub release is out; a notification and a dot on the menu-bar icon flag it, and clicking the notification installs it.
 
