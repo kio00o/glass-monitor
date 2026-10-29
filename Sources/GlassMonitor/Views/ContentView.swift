@@ -125,8 +125,8 @@ struct ContentView: View {
             VStack(spacing: Self.spacing) {
                 HStack(alignment: .top, spacing: Self.spacing) { column(c0); column(c1) }
                 HStack(spacing: Self.spacing) {
-                    if m.isEnabled(.alerts) { AirAlertCard() } else { Spacer(minLength: 0) }
-                    settingsSquare
+                    if m.isEnabled(.alerts) { AirAlertCard(); settingsBox(wide: false) }
+                    else { settingsBox(wide: true) }   // no alert card: the box fills the bottom row
                 }
                 if let v = updater.available { updateBanner(v) }
             }
@@ -161,12 +161,14 @@ struct ContentView: View {
         .disabled(updater.installing)
     }
 
-    /// Icon-only box in the bottom row; stretches to the alert card's height, 54 pt tall when alone.
-    private var settingsSquare: some View {
+    /// Settings box in the bottom row. `wide` (no alert card): fills the row; otherwise a 58 pt icon box
+    /// beside the alert card, matching its height.
+    private func settingsBox(wide: Bool) -> some View {
         Button { m.page = .settings } label: {
             Image(systemName: "slider.horizontal.3").font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.primary.opacity(0.85))
-                .frame(width: 58).frame(minHeight: 54, maxHeight: .infinity)
+                .frame(maxWidth: wide ? .infinity : nil)
+                .frame(width: wide ? nil : 58).frame(minHeight: 54, maxHeight: .infinity)
                 .glass(.rect(cornerRadius: 16))
                 .contentShape(.rect(cornerRadius: 16))
         }
