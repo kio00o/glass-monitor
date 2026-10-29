@@ -54,4 +54,4 @@ higher minimum macOS).
 3. Commit (`…, version X.Y.Z`), then PR → `main` and merge.
 4. On `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 5. `gh release create vX.Y.Z dist/GlassMonitor.dmg --title "Glass Monitor X.Y.Z" --notes "<what changed>"`.
-   The README's install instructions link to the latest release.
+   Keep the asset name `GlassMonitor.dmg` (in-app update fetches it). `make_dmg.sh` must keep `Install.command` in the image.
